@@ -120,43 +120,52 @@ alter table public.expenses enable row level security;
 alter table public.premium_features enable row level security;
 
 -- profiles policies
-create policy if not exists "profiles_select_own"
+drop policy if exists "profiles_select_own" on public.profiles;
+create policy "profiles_select_own"
   on public.profiles for select
   using (auth.uid() = id);
 
-create policy if not exists "profiles_insert_own"
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own"
   on public.profiles for insert
   with check (auth.uid() = id);
 
-create policy if not exists "profiles_update_own"
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own"
   on public.profiles for update
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
 -- categories are shared read-only
-create policy if not exists "categories_read_all"
+drop policy if exists "categories_read_all" on public.categories;
+create policy "categories_read_all"
   on public.categories for select
   using (true);
 
 -- premium features are shared read-only
-create policy if not exists "premium_features_read_all"
+drop policy if exists "premium_features_read_all" on public.premium_features;
+create policy "premium_features_read_all"
   on public.premium_features for select
   using (true);
 
 -- expenses policies
-create policy if not exists "expenses_select_own"
+drop policy if exists "expenses_select_own" on public.expenses;
+create policy "expenses_select_own"
   on public.expenses for select
   using (auth.uid() = user_id);
 
-create policy if not exists "expenses_insert_own"
+drop policy if exists "expenses_insert_own" on public.expenses;
+create policy "expenses_insert_own"
   on public.expenses for insert
   with check (auth.uid() = user_id);
 
-create policy if not exists "expenses_update_own"
+drop policy if exists "expenses_update_own" on public.expenses;
+create policy "expenses_update_own"
   on public.expenses for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
-create policy if not exists "expenses_delete_own"
+drop policy if exists "expenses_delete_own" on public.expenses;
+create policy "expenses_delete_own"
   on public.expenses for delete
   using (auth.uid() = user_id);

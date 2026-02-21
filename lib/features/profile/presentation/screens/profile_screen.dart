@@ -7,13 +7,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/config/theme_mode_provider.dart';
+import 'package:moneii_manager/core/utils/currency_utils.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
 import 'package:moneii_manager/features/onboarding/presentation/providers/onboarding_provider.dart';
+import 'package:moneii_manager/features/profile/domain/entities/financial_account.dart';
+import 'package:moneii_manager/features/profile/presentation/providers/financial_account_provider.dart';
 import 'package:moneii_manager/shared/widgets/glass_card.dart';
 import 'package:moneii_manager/shared/widgets/shimmer_skeleton.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.autoOpenAddAccount = false});
+
+  final bool autoOpenAddAccount;
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -29,6 +34,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _saving = false;
   bool _notificationsEnabled = true;
   bool _settingsLoaded = false;
+  bool _autoDialogHandled = false;
   XFile? _selectedAvatar;
   String? _avatarUrl;
 
@@ -86,6 +92,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _saveProfile() async {
     final profile = ref.read(profileProvider).valueOrNull;
     if (profile == null) return;
+    final previousCurrency = profile.currencyPreference;
+    final changedCurrency = previousCurrency != _currency;
+    final currentYear = DateTime.now().year;
+
+    var changeCount = profile.currencyChangeCount;
+    var changeYear = profile.currencyChangeYear;
+    if (profile.isPremium && changeYear != currentYear) {
+      changeCount = 0;
+      changeYear = currentYear;
+    }
+
+    if (changedCurrency) {
+      final allowedChanges = profile.isPremium ? 5 : 3;
+      if (changeCount >= allowedChanges) {
+        final message = profile.isPremium
+            ? 'Premium limit reached: you can change currency up to 5 times per year.'
+            : 'Free limit reached: you can change currency up to 3 times. Upgrade to Premium for up to 5 changes/year.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+        return;
+      }
+
+      final confirmed = await _showCurrencyChangeConfirmDialog(
+        remainingAfterChange: allowedChanges - (changeCount + 1),
+        isPremium: profile.isPremium,
+      );
+      if (!confirmed) return;
+    }
 
     HapticFeedback.mediumImpact();
     setState(() => _saving = true);
@@ -105,6 +140,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ? null
                 : _bioController.text.trim(),
             'currency_preference': _currency,
+            'currency_change_count': changedCurrency
+                ? changeCount + 1
+                : changeCount,
+            'currency_change_year': changeYear,
             'avatar_url': avatarUrl,
             'updated_at': DateTime.now().toIso8601String(),
           })
@@ -115,9 +154,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
       ref.invalidate(profileProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Profile updated')));
+      final allowedChanges = profile.isPremium ? 5 : 3;
+      final updatedCount = changedCurrency ? changeCount + 1 : changeCount;
+      final remainingChanges = (allowedChanges - updatedCount).clamp(
+        0,
+        allowedChanges,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            changedCurrency
+                ? 'Currency changed to ${CurrencyUtils.currencyLabel(_currency)}. Remaining currency changes: $remainingChanges.'
+                : 'Profile updated',
+          ),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,7 +184,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.autoOpenAddAccount && !_autoDialogHandled) {
+      _autoDialogHandled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showAddAccountDialog();
+      });
+    }
+
     final profileAsync = ref.watch(profileProvider);
+    final accountsAsync = ref.watch(financialAccountsProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final themeMode = ref.watch(themeModeProvider);
 
@@ -171,6 +231,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ref.read(sharedPreferencesProvider).getBool(_notificationKey) ??
                 true;
           }
+
+          final freeOrPremiumLimit = profile.isPremium ? 5 : 3;
+          var trackedCount = profile.currencyChangeCount;
+          if (profile.isPremium &&
+              profile.currencyChangeYear != DateTime.now().year) {
+            trackedCount = 0;
+          }
+          final remainingChanges = (freeOrPremiumLimit - trackedCount).clamp(
+            0,
+            freeOrPremiumLimit,
+          );
 
           final name = profile.displayName?.trim().isNotEmpty == true
               ? profile.displayName!
@@ -230,6 +301,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               const SizedBox(height: 14),
               GlassCard(
                 margin: EdgeInsets.zero,
+                child: _AccountManagerSection(
+                  accountsAsync: accountsAsync,
+                  currency: profile.currencyPreference,
+                  onAdd: _showAddAccountDialog,
+                  onEdit: _showEditAccountDialog,
+                  onSetDefault: (account) async {
+                    await ref
+                        .read(financialAccountActionsProvider.notifier)
+                        .setDefault(
+                          accountId: account.id,
+                          accountType: account.accountType,
+                        );
+                  },
+                  onDelete: (account) async {
+                    await ref
+                        .read(financialAccountActionsProvider.notifier)
+                        .deleteAccount(account.id);
+                  },
+                ),
+              ),
+              const SizedBox(height: 14),
+              GlassCard(
+                margin: EdgeInsets.zero,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -272,18 +366,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       initialValue: _currency,
                       decoration: const InputDecoration(
                         labelText: 'Currency preference',
-                        prefixIcon: Icon(Icons.attach_money_rounded),
+                        prefixIcon: Icon(Icons.currency_exchange_rounded),
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 'USD', child: Text('USD')),
-                        DropdownMenuItem(value: 'EUR', child: Text('EUR')),
-                        DropdownMenuItem(value: 'GBP', child: Text('GBP')),
-                        DropdownMenuItem(value: 'INR', child: Text('INR')),
-                        DropdownMenuItem(value: 'JPY', child: Text('JPY')),
-                      ],
+                      items: CurrencyUtils.supportedCurrencies
+                          .map(
+                            (currency) => DropdownMenuItem(
+                              value: currency,
+                              child: Text(
+                                CurrencyUtils.currencyLabel(currency),
+                              ),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (value) {
                         if (value != null) setState(() => _currency = value);
                       },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      profile.isPremium
+                          ? 'You can change currency $remainingChanges more time(s) this year.'
+                          : 'You can change currency $remainingChanges more time(s) on free plan.',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
@@ -441,6 +548,458 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ).animate().fadeIn(duration: 250.ms).slideY(begin: 0.03);
         },
       ),
+    );
+  }
+
+  Future<bool> _showCurrencyChangeConfirmDialog({
+    required int remainingAfterChange,
+    required bool isPremium,
+  }) async {
+    final message = isPremium
+        ? 'This change will be counted in your yearly premium limit. Remaining after this change: $remainingAfterChange.'
+        : 'Free plan allows 3 currency changes total. Remaining after this change: $remainingAfterChange.';
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Confirm Currency Change'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
+  Future<void> _showAddAccountDialog() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final nameController = TextEditingController();
+    final balanceController = TextEditingController();
+    final utilizedController = TextEditingController();
+    var type = 'bank_account';
+    var isDefault = true;
+
+    final added = await showDialog<bool>(
+        context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Account'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Name (e.g. HDFC Salary)',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: type,
+                    decoration: const InputDecoration(labelText: 'Type'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'bank_account',
+                        child: Text('Bank Account'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'credit_card',
+                        child: Text('Credit Card'),
+                      ),
+                      DropdownMenuItem(value: 'wallet', child: Text('Wallet')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() {
+                          type = value;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: balanceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: type == 'credit_card'
+                          ? 'Credit limit'
+                          : 'Account balance (optional)',
+                      hintText: type == 'credit_card'
+                          ? 'Enter your card limit'
+                          : 'Leave empty to start from 0',
+                    ),
+                  ),
+                  if (type == 'credit_card') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: utilizedController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Currently utilized (optional)',
+                        hintText: 'Leave empty for 0',
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Text(
+                    type == 'credit_card'
+                        ? 'Tip: We track cards using limit and utilized amount. Available credit is shown as limit minus utilized.'
+                        : 'Tip: Adding initial balance helps track account balance accurately. '
+                              'If you leave it empty, it starts at 0 and can go negative after expenses.',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    value: isDefault,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Set as default'),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        isDefault = value ?? false;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (added != true) return;
+    final name = nameController.text.trim();
+    final initialBalance =
+        double.tryParse(balanceController.text.trim().replaceAll(',', '')) ?? 0;
+    final initialUtilized =
+        double.tryParse(utilizedController.text.trim().replaceAll(',', '')) ??
+        0;
+    if (name.isEmpty) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter account name.')),
+      );
+      return;
+    }
+    if (type == 'credit_card' && initialBalance <= 0) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter a valid credit limit.')),
+      );
+      return;
+    }
+    if (type == 'credit_card' && initialUtilized < 0) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Utilized amount cannot be negative.')),
+      );
+      return;
+    }
+
+    try {
+      await ref
+          .read(financialAccountActionsProvider.notifier)
+          .addAccount(
+            name: name,
+            accountType: type,
+            isDefault: isDefault,
+            initialBalance: type == 'credit_card' ? 0 : initialBalance,
+            creditLimit: type == 'credit_card' ? initialBalance : 0,
+            initialUtilizedAmount: type == 'credit_card' ? initialUtilized : 0,
+          );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            type == 'credit_card'
+                ? 'Credit card added. Available credit is tracked automatically.'
+                : initialBalance == 0
+                ? 'Account added. It starts at 0 and may go negative after expenses.'
+                : 'Account added with initial balance.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  Future<void> _showEditAccountDialog(FinancialAccount account) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final nameController = TextEditingController(text: account.name);
+    final balanceController = TextEditingController(
+      text: account.accountType == 'credit_card'
+          ? account.creditLimit.toStringAsFixed(2)
+          : account.initialBalance.toStringAsFixed(2),
+    );
+    final utilizedController = TextEditingController(
+      text: account.utilizedAmount.toStringAsFixed(2),
+    );
+    var isDefault = account.isDefault;
+
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Edit Account'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: balanceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: account.accountType == 'credit_card'
+                          ? 'Credit limit'
+                          : 'Account balance',
+                    ),
+                  ),
+                  if (account.accountType == 'credit_card') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: utilizedController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Current utilized amount',
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    value: isDefault,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Set as default'),
+                    onChanged: (value) {
+                      setDialogState(() => isDefault = value ?? false);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (updated != true) return;
+    final name = nameController.text.trim();
+    final parsedPrimary =
+        double.tryParse(balanceController.text.trim().replaceAll(',', '')) ?? 0;
+    final parsedUtilized =
+        double.tryParse(utilizedController.text.trim().replaceAll(',', '')) ?? 0;
+
+    if (name.isEmpty) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter account name.')),
+      );
+      return;
+    }
+    if (account.accountType == 'credit_card' && parsedPrimary <= 0) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter a valid credit limit.')),
+      );
+      return;
+    }
+    if (account.accountType == 'credit_card' && parsedUtilized < 0) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Utilized amount cannot be negative.')),
+      );
+      return;
+    }
+
+    try {
+      await ref
+          .read(financialAccountActionsProvider.notifier)
+          .updateAccount(
+            account: account,
+            name: name,
+            isDefault: isDefault,
+            initialBalance: account.accountType == 'credit_card'
+                ? null
+                : parsedPrimary,
+            creditLimit: account.accountType == 'credit_card'
+                ? parsedPrimary
+                : null,
+            utilizedAmount: account.accountType == 'credit_card'
+                ? parsedUtilized
+                : null,
+          );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Account updated.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+      );
+    }
+  }
+}
+
+class _AccountManagerSection extends StatelessWidget {
+  const _AccountManagerSection({
+    required this.accountsAsync,
+    required this.currency,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onSetDefault,
+    required this.onDelete,
+  });
+
+  final AsyncValue<List<FinancialAccount>> accountsAsync;
+  final String currency;
+  final VoidCallback onAdd;
+  final Future<void> Function(FinancialAccount account) onEdit;
+  final Future<void> Function(FinancialAccount account) onSetDefault;
+  final Future<void> Function(FinancialAccount account) onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Accounts, Cards & Wallets',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        accountsAsync.when(
+          loading: () => const Text(
+            'Loading accounts...',
+            style: TextStyle(color: AppColors.textMuted),
+          ),
+          error: (error, _) => Text(
+            error.toString(),
+            style: const TextStyle(color: AppColors.error),
+          ),
+          data: (accounts) {
+            if (accounts.isEmpty) {
+              return const Text(
+                'Add accounts/cards/wallets so transactions can map correctly.',
+                style: TextStyle(color: AppColors.textMuted),
+              );
+            }
+
+            return Column(
+              children: accounts.map((account) {
+                final typeLabel = switch (account.accountType) {
+                  'credit_card' => 'Credit Card',
+                  'wallet' => 'Wallet',
+                  _ => 'Bank Account',
+                };
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    switch (account.accountType) {
+                      'credit_card' => Icons.credit_card_rounded,
+                      'wallet' => Icons.account_balance_wallet_rounded,
+                      _ => Icons.account_balance_rounded,
+                    },
+                  ),
+                  title: Text(account.name),
+                  subtitle: Text(
+                    account.accountType == 'credit_card'
+                        ? account.isDefault
+                              ? '$typeLabel • Default • Utilized ${CurrencyUtils.format(account.utilizedAmount, currency: currency)} / Limit ${CurrencyUtils.format(account.creditLimit, currency: currency)}'
+                              : '$typeLabel • Utilized ${CurrencyUtils.format(account.utilizedAmount, currency: currency)} / Limit ${CurrencyUtils.format(account.creditLimit, currency: currency)}'
+                        : account.isDefault
+                        ? '$typeLabel • Default • ${CurrencyUtils.format(account.currentBalance, currency: currency)}'
+                        : '$typeLabel • ${CurrencyUtils.format(account.currentBalance, currency: currency)}',
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) async {
+                      if (value == 'edit') {
+                        await onEdit(account);
+                      } else if (value == 'default') {
+                        await onSetDefault(account);
+                      } else if (value == 'delete') {
+                        await onDelete(account);
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      PopupMenuItem(
+                        value: 'default',
+                        child: Text('Set as default'),
+                      ),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
     );
   }
 }

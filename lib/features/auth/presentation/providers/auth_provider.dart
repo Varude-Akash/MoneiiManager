@@ -61,7 +61,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
     await _client.auth.signOut();
   }
 
-  Future<void> completeSetup(String displayName, {String? avatarUrl}) async {
+  Future<void> completeSetup(
+    String displayName, {
+    String? avatarUrl,
+    required String currencyPreference,
+  }) async {
     state = const AsyncValue.loading();
     try {
       final userId = _client.auth.currentUser?.id;
@@ -73,7 +77,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
         'email': _client.auth.currentUser?.email ?? '',
         'avatar_url': avatarUrl,
         'is_setup_complete': true,
-        'currency_preference': 'USD',
+        'currency_preference': currencyPreference,
       });
       state = const AsyncValue.data(null);
     } catch (e, st) {

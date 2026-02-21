@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:moneii_manager/core/constants.dart';
 
@@ -11,20 +9,21 @@ class AudioRecorderService {
   String? _currentPath;
 
   Future<void> startRecording() async {
-    final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) {
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
       throw Exception('Microphone permission is required');
     }
 
-    final dir = await getTemporaryDirectory();
+    final dir = Directory.systemTemp;
     _currentPath =
         '${dir.path}/voice_input_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
     await _recorder.start(
       const RecordConfig(
         encoder: AudioEncoder.aacLc,
-        sampleRate: 16000,
+        sampleRate: 44100,
         bitRate: 128000,
+        numChannels: 1,
       ),
       path: _currentPath!,
     );

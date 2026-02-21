@@ -63,6 +63,11 @@ class AppCategories {
         'kfc',
         'subway',
         'chipotle',
+        'idli',
+        'dosa',
+        'vada',
+        'sambar',
+        'chai',
       ],
     ),
     CategoryData(
@@ -365,6 +370,21 @@ class AppConstants {
   static const String defaultCurrency = 'USD';
   static const int maxRecordingDurationSeconds = 30;
   static const String whisperModel = 'whisper-1';
+  static const String descriptionModel = 'gpt-4o-mini';
   static const String whisperApiUrl =
       'https://api.openai.com/v1/audio/transcriptions';
+
+  static const List<String> transactionTypes = [
+    'expense',
+    'income',
+    'transfer',
+    'credit_card_payment',
+  ];
+
+  static const List<String> paymentSources = [
+    'cash',
+    'bank_account',
+    'credit_card',
+    'wallet',
+  ];
 }

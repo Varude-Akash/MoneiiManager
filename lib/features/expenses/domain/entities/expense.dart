@@ -11,6 +11,10 @@ class Expense extends Equatable {
   final String? subcategoryName;
   final String? description;
   final DateTime expenseDate;
+  final String transactionType;
+  final String paymentSource;
+  final String? accountId;
+  final String? destinationAccountId;
   final String inputMethod;
   final String? rawTranscript;
   final DateTime createdAt;
@@ -26,6 +30,10 @@ class Expense extends Equatable {
     this.subcategoryName,
     this.description,
     required this.expenseDate,
+    this.transactionType = 'expense',
+    this.paymentSource = 'cash',
+    this.accountId,
+    this.destinationAccountId,
     this.inputMethod = 'manual',
     this.rawTranscript,
     required this.createdAt,
@@ -42,6 +50,10 @@ class Expense extends Equatable {
     String? subcategoryName,
     String? description,
     DateTime? expenseDate,
+    String? transactionType,
+    String? paymentSource,
+    String? accountId,
+    String? destinationAccountId,
     String? inputMethod,
     String? rawTranscript,
     DateTime? createdAt,
@@ -57,6 +69,10 @@ class Expense extends Equatable {
       subcategoryName: subcategoryName ?? this.subcategoryName,
       description: description ?? this.description,
       expenseDate: expenseDate ?? this.expenseDate,
+      transactionType: transactionType ?? this.transactionType,
+      paymentSource: paymentSource ?? this.paymentSource,
+      accountId: accountId ?? this.accountId,
+      destinationAccountId: destinationAccountId ?? this.destinationAccountId,
       inputMethod: inputMethod ?? this.inputMethod,
       rawTranscript: rawTranscript ?? this.rawTranscript,
       createdAt: createdAt ?? this.createdAt,
@@ -83,6 +99,10 @@ class Expense extends Equatable {
               : null),
       description: json['description'] as String?,
       expenseDate: DateTime.parse(json['expense_date'] as String),
+      transactionType: json['transaction_type'] as String? ?? 'expense',
+      paymentSource: json['payment_source'] as String? ?? 'cash',
+      accountId: json['account_id'] as String?,
+      destinationAccountId: json['destination_account_id'] as String?,
       inputMethod: json['input_method'] as String? ?? 'manual',
       rawTranscript: json['raw_transcript'] as String?,
       createdAt: DateTime.parse(
@@ -101,6 +121,10 @@ class Expense extends Equatable {
       'subcategory_id': subcategoryId,
       'description': description,
       'expense_date': expenseDate.toIso8601String().split('T')[0],
+      'transaction_type': transactionType,
+      'payment_source': paymentSource,
+      'account_id': accountId,
+      'destination_account_id': destinationAccountId,
       'input_method': inputMethod,
       'raw_transcript': rawTranscript,
     };
@@ -114,10 +138,24 @@ class Expense extends Equatable {
       'subcategory_id': subcategoryId,
       'description': description,
       'expense_date': expenseDate.toIso8601String().split('T')[0],
+      'transaction_type': transactionType,
+      'payment_source': paymentSource,
+      'account_id': accountId,
+      'destination_account_id': destinationAccountId,
       'updated_at': DateTime.now().toIso8601String(),
     };
   }
 
   @override
-  List<Object?> get props => [id, amount, categoryId, description, expenseDate];
+  List<Object?> get props => [
+    id,
+    amount,
+    categoryId,
+    description,
+    expenseDate,
+    transactionType,
+    paymentSource,
+    accountId,
+    destinationAccountId,
+  ];
 }

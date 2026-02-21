@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:moneii_manager/features/voice/data/datasources/voice_description_remote_datasource.dart';
 import 'package:moneii_manager/features/voice/data/datasources/whisper_remote_datasource.dart';
 import 'package:moneii_manager/features/voice/data/services/audio_recorder_service.dart';
 import 'package:moneii_manager/features/voice/data/services/expense_parser_service.dart';
@@ -33,11 +34,13 @@ class VoiceError extends VoiceInputState {
 class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
   final AudioRecorderService _recorder;
   final WhisperRemoteDatasource _whisper;
+  final VoiceDescriptionRemoteDatasource _descriptionAi;
   final ExpenseParserService _parser;
 
   VoiceInputNotifier()
     : _recorder = AudioRecorderService(),
       _whisper = WhisperRemoteDatasource(),
+      _descriptionAi = VoiceDescriptionRemoteDatasource(),
       _parser = ExpenseParserService(),
       super(const VoiceIdle());
 
@@ -46,7 +49,7 @@ class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
       await _recorder.startRecording();
       state = const VoiceRecording();
     } catch (e) {
-      state = VoiceError('Could not start recording: $e');
+      state = VoiceError(_friendlyError(e.toString(), forStart: true));
     }
   }
 
@@ -56,22 +59,81 @@ class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
     try {
       final path = await _recorder.stopRecording();
       if (path == null) {
-        state = const VoiceError('No audio recorded.');
+        state = const VoiceError(
+          'No audio transcript detected. Please try again or add manually.',
+        );
         return;
       }
       final transcript = await _whisper.transcribe(path);
-      state = VoiceParsed(_parser.parse(transcript));
+      if (transcript.trim().isEmpty) {
+        state = const VoiceError(
+          'No audio transcript detected. Please try again or add manually.',
+        );
+        return;
+      }
+      final parsed = _parser.parse(transcript);
+      final aiDescription = await _safeAiDescription(
+        transcript: transcript,
+        fallbackDescription: parsed.description,
+      );
+      state = VoiceParsed(
+        aiDescription == null || aiDescription.isEmpty
+            ? parsed
+            : parsed.copyWith(description: aiDescription),
+      );
     } catch (e) {
-      state = VoiceError('Failed to process: $e');
+      state = VoiceError(_friendlyError(e.toString()));
     }
   }
 
   void reset() => state = const VoiceIdle();
 
+  Future<String?> _safeAiDescription({
+    required String transcript,
+    required String fallbackDescription,
+  }) async {
+    try {
+      return await _descriptionAi.summarizeExpense(
+        transcript: transcript,
+        fallbackDescription: fallbackDescription,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   void dispose() {
     _recorder.dispose();
     super.dispose();
+  }
+
+  String _friendlyError(String raw, {bool forStart = false}) {
+    final text = raw.toLowerCase();
+
+    if (forStart ||
+        text.contains('permission') ||
+        text.contains('microphone')) {
+      return 'Microphone permission is required. Please allow mic access and try again.';
+    }
+    if (text.contains('no clear speech detected') ||
+        text.contains('inaudible') ||
+        text.contains('empty audio')) {
+      return 'Inaudible audio detected. Please speak clearly and try again.';
+    }
+    if (text.contains('socketexception') ||
+        text.contains('connection') ||
+        text.contains('network') ||
+        text.contains('timeout')) {
+      return 'Network issue while transcribing. Please check internet and try again.';
+    }
+    if (text.contains('401') ||
+        text.contains('403') ||
+        text.contains('api key') ||
+        text.contains('unauthorized')) {
+      return 'Voice service is unavailable right now. Please try again later or add manually.';
+    }
+    return 'Could not process voice input. Please try again or add manually.';
   }
 }
 

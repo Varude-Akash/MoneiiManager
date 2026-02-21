@@ -5,9 +5,10 @@ import 'package:moneii_manager/features/auth/presentation/screens/login_screen.d
 import 'package:moneii_manager/features/auth/presentation/screens/register_screen.dart';
 import 'package:moneii_manager/features/auth/presentation/screens/setup_screen.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
+import 'package:moneii_manager/features/activity/presentation/screens/activity_screen.dart';
 import 'package:moneii_manager/features/expenses/domain/entities/expense.dart';
-import 'package:moneii_manager/features/expenses/presentation/screens/expense_list_screen.dart';
 import 'package:moneii_manager/features/expenses/presentation/screens/add_expense_screen.dart';
+import 'package:moneii_manager/features/home/presentation/screens/voice_home_screen.dart';
 import 'package:moneii_manager/features/analytics/presentation/screens/analytics_screen.dart';
 import 'package:moneii_manager/features/profile/presentation/screens/profile_screen.dart';
 import 'package:moneii_manager/features/onboarding/presentation/screens/onboarding_screen.dart';
@@ -24,7 +25,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final location = state.matchedLocation;
       final isOnboardingRoute = location == '/onboarding';
       final isLoggedIn = authState.valueOrNull != null;
-      final isAuthRoute = location == '/login' || location == '/register';
+      final isAuthRoute =
+          location == '/login' || location == '/register' || isOnboardingRoute;
       final isSetupRoute = location == '/setup';
 
       if (!hasSeenOnboarding && !isOnboardingRoute) return '/onboarding';
@@ -67,7 +69,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/',
             pageBuilder: (context, state) =>
-                _buildPage(state: state, child: const ExpenseListScreen()),
+                _buildPage(state: state, child: const VoiceHomeScreen()),
+          ),
+          GoRoute(
+            path: '/activity',
+            pageBuilder: (context, state) =>
+                _buildPage(state: state, child: const ActivityScreen()),
           ),
           GoRoute(
             path: '/analytics',
@@ -76,8 +83,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/profile',
-            pageBuilder: (context, state) =>
-                _buildPage(state: state, child: const ProfileScreen()),
+            pageBuilder: (context, state) => _buildPage(
+              state: state,
+              child: ProfileScreen(
+                autoOpenAddAccount:
+                    state.uri.queryParameters['openAddAccount'] == '1',
+              ),
+            ),
           ),
         ],
       ),

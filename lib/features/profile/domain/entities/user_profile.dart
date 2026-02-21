@@ -8,6 +8,8 @@ class UserProfile extends Equatable {
   final String? phone;
   final String? bio;
   final String currencyPreference;
+  final int currencyChangeCount;
+  final int currencyChangeYear;
   final bool isPremium;
   final bool isSetupComplete;
   final DateTime createdAt;
@@ -21,6 +23,8 @@ class UserProfile extends Equatable {
     this.phone,
     this.bio,
     this.currencyPreference = 'USD',
+    this.currencyChangeCount = 0,
+    this.currencyChangeYear = 1970,
     this.isPremium = false,
     this.isSetupComplete = false,
     required this.createdAt,
@@ -33,6 +37,8 @@ class UserProfile extends Equatable {
     String? phone,
     String? bio,
     String? currencyPreference,
+    int? currencyChangeCount,
+    int? currencyChangeYear,
     bool? isPremium,
     bool? isSetupComplete,
   }) {
@@ -44,6 +50,8 @@ class UserProfile extends Equatable {
       phone: phone ?? this.phone,
       bio: bio ?? this.bio,
       currencyPreference: currencyPreference ?? this.currencyPreference,
+      currencyChangeCount: currencyChangeCount ?? this.currencyChangeCount,
+      currencyChangeYear: currencyChangeYear ?? this.currencyChangeYear,
       isPremium: isPremium ?? this.isPremium,
       isSetupComplete: isSetupComplete ?? this.isSetupComplete,
       createdAt: createdAt,
@@ -60,6 +68,9 @@ class UserProfile extends Equatable {
       phone: json['phone'] as String?,
       bio: json['bio'] as String?,
       currencyPreference: json['currency_preference'] as String? ?? 'USD',
+      currencyChangeCount: json['currency_change_count'] as int? ?? 0,
+      currencyChangeYear:
+          json['currency_change_year'] as int? ?? DateTime.now().year,
       isPremium: json['is_premium'] as bool? ?? false,
       isSetupComplete: json['is_setup_complete'] as bool? ?? false,
       createdAt: DateTime.parse(
@@ -80,6 +91,8 @@ class UserProfile extends Equatable {
       'phone': phone,
       'bio': bio,
       'currency_preference': currencyPreference,
+      'currency_change_count': currencyChangeCount,
+      'currency_change_year': currencyChangeYear,
       'is_premium': isPremium,
       'is_setup_complete': isSetupComplete,
     };
@@ -94,6 +107,8 @@ class UserProfile extends Equatable {
     phone,
     bio,
     currencyPreference,
+    currencyChangeCount,
+    currencyChangeYear,
     isPremium,
     isSetupComplete,
   ];

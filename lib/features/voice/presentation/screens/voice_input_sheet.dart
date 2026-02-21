@@ -1,21 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:moneii_manager/config/theme.dart';
+import 'package:moneii_manager/core/premium/premium_features.dart';
+import 'package:moneii_manager/core/utils/currency_utils.dart';
+import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
 import 'package:moneii_manager/features/voice/domain/entities/parsed_expense.dart';
 import 'package:moneii_manager/features/voice/presentation/providers/voice_input_provider.dart';
+import 'package:moneii_manager/shared/widgets/premium_gate.dart';
 
-Future<ParsedExpense?> showVoiceInputSheet(BuildContext context) {
+Future<ParsedExpense?> showVoiceInputSheet(
+  BuildContext context, {
+  ParsedExpense? initialExpense,
+}) {
   return showModalBottomSheet<ParsedExpense>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const _VoiceInputSheet(),
+    builder: (_) => _VoiceInputSheet(initialExpense: initialExpense),
   );
 }
 
 class _VoiceInputSheet extends ConsumerStatefulWidget {
-  const _VoiceInputSheet();
+  const _VoiceInputSheet({this.initialExpense});
+
+  final ParsedExpense? initialExpense;
 
   @override
   ConsumerState<_VoiceInputSheet> createState() => _VoiceInputSheetState();
@@ -25,6 +35,17 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
   ParsedExpense? _editableExpense;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialExpense;
+    if (initial != null) {
+      _editableExpense = initial;
+      _amountController.text = initial.amount.toStringAsFixed(2);
+      _descriptionController.text = initial.description;
+    }
+  }
 
   @override
   void dispose() {
@@ -37,6 +58,10 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
   Widget build(BuildContext context) {
     final state = ref.watch(voiceInputProvider);
     final notifier = ref.read(voiceInputProvider.notifier);
+    final preferredCurrency =
+        ref.watch(profileProvider).valueOrNull?.currencyPreference ?? 'USD';
+    final isPremium = ref.watch(profileProvider).valueOrNull?.isPremium ?? false;
+    final currencySymbol = CurrencyUtils.symbolFor(preferredCurrency);
 
     if (state is VoiceParsed && _editableExpense == null) {
       _editableExpense = state.expense;
@@ -81,9 +106,10 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  if (state is VoiceIdle || state is VoiceRecording)
+                  if ((state is VoiceIdle || state is VoiceRecording) &&
+                      _editableExpense == null)
                     _buildMicSection(state, notifier),
-                  if (state is VoiceTranscribing)
+                  if (state is VoiceTranscribing && _editableExpense == null)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 40),
                       child: Column(
@@ -97,8 +123,14 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
                         ],
                       ),
                     ),
-                  if (state is VoiceParsed && _editableExpense != null)
-                    _buildParsedSection(context, _editableExpense!, notifier),
+                  if (_editableExpense != null)
+                    _buildParsedSection(
+                      context,
+                      _editableExpense!,
+                      notifier,
+                      currencySymbol,
+                      isPremium,
+                    ),
                   if (state is VoiceError)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 32),
@@ -118,9 +150,35 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 20),
-                          TextButton(
-                            onPressed: notifier.reset,
-                            child: const Text('Try again'),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: notifier.reset,
+                                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                                  label: const Text('Try again'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    final route = GoRouterState.of(
+                                      context,
+                                    ).matchedLocation;
+                                    Navigator.pop(context);
+                                    if (route != '/add-expense') {
+                                      context.push('/add-expense');
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.edit_note_rounded,
+                                    size: 16,
+                                  ),
+                                  label: const Text('Add manually'),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -196,7 +254,16 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
     BuildContext context,
     ParsedExpense expense,
     VoiceInputNotifier notifier,
+    String currencySymbol,
+    bool isPremium,
   ) {
+    final saveLabel = switch (expense.transactionType) {
+      'income' => 'Save Income',
+      'transfer' => 'Save Transfer',
+      'credit_card_payment' => 'Save Card Bill',
+      _ => 'Save Expense',
+    };
+
     return Column(
       children: [
         Container(
@@ -258,8 +325,8 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                 ),
-                decoration: const InputDecoration(
-                  prefixText: '\$',
+                decoration: InputDecoration(
+                  prefixText: currencySymbol,
                   prefixStyle: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 26,
@@ -290,6 +357,19 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
                   color: AppColors.textMuted,
                   fontSize: 12,
                   fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => showPremiumFeatureGate(
+                    context,
+                    feature: PremiumFeatureKey.aiFinancialCoach,
+                    isPremium: isPremium,
+                  ),
+                  icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+                  label: const Text('AI Voice Assistant (Premium)'),
                 ),
               ),
             ],
@@ -332,7 +412,7 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: const Text('Save Expense'),
+                child: Text(saveLabel),
               ),
             ),
           ],

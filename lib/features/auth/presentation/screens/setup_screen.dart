@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:moneii_manager/config/theme.dart';
+import 'package:moneii_manager/core/utils/currency_utils.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
 
 class SetupScreen extends ConsumerStatefulWidget {
@@ -20,6 +21,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   final _nameController = TextEditingController();
   final _picker = ImagePicker();
   XFile? _selectedAvatar;
+  String _currency = 'USD';
 
   @override
   void dispose() {
@@ -76,7 +78,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
     await ref
         .read(authNotifierProvider.notifier)
-        .completeSetup(name, avatarUrl: avatarUrl);
+        .completeSetup(
+          name,
+          avatarUrl: avatarUrl,
+          currencyPreference: _currency,
+        );
     ref.invalidate(profileProvider);
 
     if (mounted) context.go('/');
@@ -143,6 +149,27 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                     ),
                   ).animate().fadeIn(delay: 340.ms),
                   const SizedBox(height: 32),
+                  DropdownButtonFormField<String>(
+                    initialValue: _currency,
+                    decoration: const InputDecoration(
+                      labelText: 'Preferred currency',
+                      prefixIcon: Icon(Icons.currency_exchange_rounded),
+                    ),
+                    items: CurrencyUtils.supportedCurrencies
+                        .map(
+                          (currency) => DropdownMenuItem(
+                            value: currency,
+                            child: Text(CurrencyUtils.currencyLabel(currency)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _currency = value);
+                      }
+                    },
+                  ).animate().fadeIn(delay: 370.ms),
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: _nameController,
                     textCapitalization: TextCapitalization.words,

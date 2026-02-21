@@ -7,14 +7,19 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/core/constants.dart';
+import 'package:moneii_manager/core/premium/premium_features.dart';
+import 'package:moneii_manager/core/utils/currency_utils.dart';
 import 'package:moneii_manager/core/utils/date_utils.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
 import 'package:moneii_manager/features/expenses/domain/entities/category.dart';
 import 'package:moneii_manager/features/expenses/domain/entities/expense.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/category_provider.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/expense_provider.dart';
+import 'package:moneii_manager/features/profile/domain/entities/financial_account.dart';
+import 'package:moneii_manager/features/profile/presentation/providers/financial_account_provider.dart';
 import 'package:moneii_manager/features/voice/domain/entities/parsed_expense.dart';
 import 'package:moneii_manager/features/voice/presentation/screens/voice_input_sheet.dart';
+import 'package:moneii_manager/shared/widgets/premium_gate.dart';
 
 class AddExpenseInitialData {
   const AddExpenseInitialData({
@@ -22,6 +27,10 @@ class AddExpenseInitialData {
     required this.categoryName,
     this.subcategoryName,
     required this.description,
+    required this.expenseDate,
+    this.transactionType = 'expense',
+    this.paymentSource = 'cash',
+    this.accountNameHint,
     this.rawTranscript,
   });
 
@@ -29,6 +38,10 @@ class AddExpenseInitialData {
   final String categoryName;
   final String? subcategoryName;
   final String description;
+  final DateTime expenseDate;
+  final String transactionType;
+  final String paymentSource;
+  final String? accountNameHint;
   final String? rawTranscript;
 
   factory AddExpenseInitialData.fromParsed(ParsedExpense parsedExpense) {
@@ -37,6 +50,10 @@ class AddExpenseInitialData {
       categoryName: parsedExpense.categoryName,
       subcategoryName: parsedExpense.subcategoryName,
       description: parsedExpense.description,
+      expenseDate: parsedExpense.expenseDate,
+      transactionType: parsedExpense.transactionType,
+      paymentSource: parsedExpense.paymentSource,
+      accountNameHint: parsedExpense.accountNameHint,
       rawTranscript: parsedExpense.rawTranscript,
     );
   }
@@ -61,6 +78,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   DateTime _selectedDate = DateTime.now();
   int? _selectedCategoryId;
   int? _selectedSubcategoryId;
+  String _transactionType = 'expense';
+  String _paymentSource = 'cash';
+  String? _selectedAccountId;
+  String? _selectedDestinationAccountId;
+  String? _accountNameHint;
   String? _rawTranscript;
 
   bool get _isEditing => widget.initialExpense != null;
@@ -77,6 +99,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _selectedDate = initialExpense.expenseDate;
       _selectedCategoryId = initialExpense.categoryId;
       _selectedSubcategoryId = initialExpense.subcategoryId;
+      _transactionType = initialExpense.transactionType;
+      _paymentSource = initialExpense.paymentSource;
+      _selectedAccountId = initialExpense.accountId;
+      _selectedDestinationAccountId = initialExpense.destinationAccountId;
       _rawTranscript = initialExpense.rawTranscript;
       return;
     }
@@ -86,6 +112,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         _amountController.text = initialData.amount.toStringAsFixed(2);
       }
       _descriptionController.text = initialData.description;
+      _selectedDate = initialData.expenseDate;
+      _transactionType = initialData.transactionType;
+      _paymentSource = initialData.paymentSource;
+      _accountNameHint = initialData.accountNameHint;
       _rawTranscript = initialData.rawTranscript;
     }
   }
@@ -107,6 +137,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           ? parsedExpense.amount.toStringAsFixed(2)
           : _amountController.text;
       _descriptionController.text = parsedExpense.description;
+      _selectedDate = parsedExpense.expenseDate;
+      _transactionType = parsedExpense.transactionType;
+      _paymentSource = parsedExpense.paymentSource;
+      _selectedAccountId = null;
+      _selectedDestinationAccountId = null;
+      _accountNameHint = parsedExpense.accountNameHint;
       _rawTranscript = parsedExpense.rawTranscript;
     });
 
@@ -173,6 +209,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Future<void> _save() async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
+    final selectedCurrency =
+        widget.initialExpense?.currency ??
+        ref.read(profileProvider).valueOrNull?.currencyPreference ??
+        AppConstants.defaultCurrency;
 
     final amount = double.tryParse(_amountController.text.replaceAll(',', ''));
     if (amount == null || amount <= 0) {
@@ -184,6 +224,61 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       return;
     }
 
+    final accounts = ref.read(financialAccountsProvider).valueOrNull ?? const [];
+    final requiredType = _requiredAccountTypeForCurrentSelection();
+
+    if (requiredType != null) {
+      final availableForType = accounts
+          .where((account) => account.accountType == requiredType)
+          .toList();
+      if (availableForType.isEmpty) {
+        _showError(
+          switch (requiredType) {
+            'credit_card' => 'Add at least one credit card in Profile first.',
+            'wallet' => 'Add at least one wallet in Profile first.',
+            _ => 'Add at least one bank account in Profile first.',
+          },
+        );
+        return;
+      }
+      if (_selectedAccountId == null) {
+        _showError(
+          switch (requiredType) {
+            'credit_card' => 'Select which credit card was used.',
+            'wallet' => 'Select which wallet was used.',
+            _ => 'Select which bank account was used.',
+          },
+        );
+        return;
+      }
+    }
+    final destinationType = _requiredDestinationAccountType();
+    if (destinationType != null) {
+      final destinationOptions = accounts
+          .where((account) => account.accountType == destinationType)
+          .toList();
+      if (destinationOptions.isEmpty) {
+        _showError(
+          destinationType == 'credit_card'
+              ? 'Add at least one credit card in Profile first.'
+              : 'Add at least one bank account in Profile first.',
+        );
+        return;
+      }
+      if (_selectedDestinationAccountId == null) {
+        _showError(
+          destinationType == 'credit_card'
+              ? 'Select which credit card is being paid.'
+              : 'Select destination account.',
+        );
+        return;
+      }
+      if (_selectedDestinationAccountId == _selectedAccountId) {
+        _showError('From and To accounts cannot be the same.');
+        return;
+      }
+    }
+
     HapticFeedback.mediumImpact();
     final existingCount = ref.read(expensesProvider).valueOrNull?.length ?? 0;
     final existing = widget.initialExpense;
@@ -191,7 +286,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       id: existing?.id ?? const Uuid().v4(),
       userId: user.id,
       amount: amount,
-      currency: AppConstants.defaultCurrency,
+      currency: selectedCurrency,
       categoryId: _selectedCategoryId!,
       subcategoryId: _selectedSubcategoryId,
       categoryName: '',
@@ -200,6 +295,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           ? null
           : _descriptionController.text.trim(),
       expenseDate: _selectedDate,
+      transactionType: _transactionType,
+      paymentSource: _paymentSource,
+      accountId: _selectedAccountId,
+      destinationAccountId: _selectedDestinationAccountId,
       inputMethod: _rawTranscript == null ? 'manual' : 'voice',
       rawTranscript: _rawTranscript,
       createdAt: existing?.createdAt ?? DateTime.now(),
@@ -269,18 +368,155 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
   }
 
+  void _autoselectAccount(List<FinancialAccount> accounts) {
+    if (_selectedAccountId != null) return;
+
+    final requiredType = _requiredAccountTypeForCurrentSelection();
+    if (requiredType == null) return;
+
+    final candidates = accounts
+        .where((account) => account.accountType == requiredType)
+        .toList();
+    if (candidates.isEmpty) return;
+
+    final transcript = (_rawTranscript ?? '').toLowerCase();
+    final hint = (_accountNameHint ?? '').toLowerCase();
+    if (transcript.isNotEmpty || hint.isNotEmpty) {
+      for (final account in candidates) {
+        final name = account.name.toLowerCase();
+        if (name.isNotEmpty &&
+            (transcript.contains(name) || (hint.isNotEmpty && name.contains(hint)))) {
+          _selectedAccountId = account.id;
+          return;
+        }
+      }
+    }
+
+    if (candidates.length == 1) {
+      _selectedAccountId = candidates.first.id;
+      return;
+    }
+
+    for (final account in candidates) {
+      if (account.isDefault) {
+        _selectedAccountId = account.id;
+        return;
+      }
+    }
+  }
+
+  void _autoselectDestinationAccount(List<FinancialAccount> accounts) {
+    if (_selectedDestinationAccountId != null) return;
+    final destinationType = _requiredDestinationAccountType();
+    if (destinationType == null) return;
+
+    final options = accounts
+        .where((account) => account.accountType == destinationType)
+        .toList();
+    if (options.isEmpty) return;
+
+    for (final account in options) {
+      if (account.isDefault && account.id != _selectedAccountId) {
+        _selectedDestinationAccountId = account.id;
+        return;
+      }
+    }
+    for (final account in options) {
+      if (account.id != _selectedAccountId) {
+        _selectedDestinationAccountId = account.id;
+        return;
+      }
+    }
+  }
+
+  String? _requiredAccountTypeForCurrentSelection() {
+    if (_transactionType == 'credit_card_payment') return 'bank_account';
+    if (_transactionType == 'transfer') return 'bank_account';
+    if (_paymentSource == 'credit_card') return 'credit_card';
+    if (_paymentSource == 'wallet') return 'wallet';
+    if (_paymentSource == 'bank_account' ||
+        (_transactionType == 'transfer' && _paymentSource == 'cash')) {
+      return 'bank_account';
+    }
+    return null;
+  }
+
+  String? _requiredDestinationAccountType() {
+    if (_transactionType == 'transfer') return 'bank_account';
+    if (_transactionType == 'credit_card_payment') return 'credit_card';
+    return null;
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: AppColors.error),
     );
   }
 
+  String _transactionTypeLabel(String value) {
+    switch (value) {
+      case 'income':
+        return 'Income';
+      case 'transfer':
+        return 'Transfer';
+      case 'credit_card_payment':
+        return 'Credit Card Bill';
+      case 'expense':
+      default:
+        return 'Expense';
+    }
+  }
+
+  String _paymentSourceLabel(String value) {
+    switch (value) {
+      case 'bank_account':
+        return 'Bank Account';
+      case 'credit_card':
+        return 'Credit Card';
+      case 'wallet':
+        return 'Wallet';
+      case 'cash':
+      default:
+        return 'Cash';
+    }
+  }
+
+  String _screenTitle() {
+    final noun = switch (_transactionType) {
+      'income' => 'Income',
+      'transfer' => 'Transfer',
+      'credit_card_payment' => 'Card Bill',
+      _ => 'Expense',
+    };
+    return _isEditing ? 'Edit $noun' : 'Add $noun';
+  }
+
+  String _saveButtonLabel() {
+    final verb = _isEditing ? 'Update' : 'Save';
+    final noun = switch (_transactionType) {
+      'income' => 'Income',
+      'transfer' => 'Transfer',
+      'credit_card_payment' => 'Card Bill',
+      _ => 'Expense',
+    };
+    return '$verb $noun';
+  }
+
   @override
   Widget build(BuildContext context) {
     final categoryTree = ref.watch(categoryTreeProvider);
+    final accounts = ref.watch(financialAccountsProvider).valueOrNull ?? const [];
+    final preferredCurrency =
+        widget.initialExpense?.currency ??
+        ref.watch(profileProvider).valueOrNull?.currencyPreference ??
+        AppConstants.defaultCurrency;
+    final isPremium = ref.watch(profileProvider).valueOrNull?.isPremium ?? false;
     final addState = ref.watch(addExpenseProvider);
     final updateState = ref.watch(updateExpenseProvider);
     final isSaving = addState.isLoading || updateState.isLoading;
+
+    _autoselectAccount(accounts);
+    _autoselectDestinationAccount(accounts);
 
     if (widget.initialData != null &&
         _selectedCategoryId == null &&
@@ -296,7 +532,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Edit Expense' : 'Add Expense'),
+        title: Text(_screenTitle()),
         actions: [
           IconButton(
             onPressed: _openVoiceInput,
@@ -308,7 +544,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _AmountCard(controller: _amountController),
+          _AmountCard(
+            controller: _amountController,
+            currencySymbol: CurrencyUtils.symbolFor(preferredCurrency),
+          ),
           const SizedBox(height: 20),
           TextField(
             controller: _descriptionController,
@@ -321,6 +560,64 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           ),
           const SizedBox(height: 20),
           _DatePickerTile(date: _selectedDate, onTap: _pickDate),
+          const SizedBox(height: 16),
+          _MetaDropdownRow(
+            title: 'Transaction type',
+            value: _transactionType,
+            values: AppConstants.transactionTypes,
+            onChanged: (value) => setState(() {
+              _transactionType = value;
+              _selectedAccountId = null;
+              _selectedDestinationAccountId = null;
+            }),
+            labelBuilder: _transactionTypeLabel,
+            icon: Icons.swap_horiz_rounded,
+          ),
+          const SizedBox(height: 12),
+          _MetaDropdownRow(
+            title: 'Paid/Received via',
+            value: _paymentSource,
+            values: AppConstants.paymentSources,
+            onChanged: (value) => setState(() {
+              _paymentSource = value;
+              _selectedAccountId = null;
+              _selectedDestinationAccountId = null;
+            }),
+            labelBuilder: _paymentSourceLabel,
+            icon: Icons.account_balance_wallet_rounded,
+          ),
+          if (_requiredAccountTypeForCurrentSelection() != null) ...[
+            const SizedBox(height: 12),
+            _AccountDropdown(
+              requiredType: _requiredAccountTypeForCurrentSelection()!,
+              selectedAccountId: _selectedAccountId,
+              accounts: accounts,
+              onChanged: (value) {
+                setState(() {
+                  _selectedAccountId = value;
+                });
+              },
+            ),
+          ],
+          if (_requiredDestinationAccountType() != null) ...[
+            const SizedBox(height: 12),
+            _AccountDropdown(
+              titleOverride: _transactionType == 'credit_card_payment'
+                  ? 'To credit card'
+                  : 'To account',
+              requiredType: _requiredDestinationAccountType()!,
+              selectedAccountId: _selectedDestinationAccountId,
+              accounts: accounts,
+              excludedAccountId: _selectedAccountId,
+              onChanged: (value) {
+                setState(() {
+                  _selectedDestinationAccountId = value;
+                });
+              },
+            ),
+          ],
+          const SizedBox(height: 12),
+          _PremiumInlineRow(isPremium: isPremium),
           const SizedBox(height: 20),
           const Text(
             'Category',
@@ -381,7 +678,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ),
                     )
                   : const Icon(Icons.check_circle_rounded),
-              label: Text(_isEditing ? 'Update Expense' : 'Save Expense'),
+              label: Text(_saveButtonLabel()),
             ),
           ),
           const SizedBox(height: 24),
@@ -391,10 +688,72 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 }
 
+class _PremiumInlineRow extends StatelessWidget {
+  const _PremiumInlineRow({required this.isPremium});
+
+  final bool isPremium;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget chip({
+      required String label,
+      required PremiumFeatureKey feature,
+    }) {
+      return InkWell(
+        onTap: () => showPremiumFeatureGate(
+          context,
+          feature: feature,
+          isPremium: isPremium,
+        ),
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceLight,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: AppColors.glassBorder),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_rounded, size: 13, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        chip(
+          label: 'Split with friends',
+          feature: PremiumFeatureKey.sharedExpenses,
+        ),
+        chip(
+          label: 'Receipt scanner',
+          feature: PremiumFeatureKey.receiptScanner,
+        ),
+        chip(
+          label: 'AI cleaner',
+          feature: PremiumFeatureKey.aiSpendingInsights,
+        ),
+      ],
+    );
+  }
+}
+
 class _AmountCard extends StatelessWidget {
-  const _AmountCard({required this.controller});
+  const _AmountCard({required this.controller, required this.currencySymbol});
 
   final TextEditingController controller;
+  final String currencySymbol;
 
   @override
   Widget build(BuildContext context) {
@@ -406,8 +765,8 @@ class _AmountCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Text(
-            '\$',
+          Text(
+            currencySymbol,
             style: TextStyle(
               color: Colors.white,
               fontSize: 32,
@@ -435,6 +794,106 @@ class _AmountCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MetaDropdownRow extends StatelessWidget {
+  const _MetaDropdownRow({
+    required this.title,
+    required this.value,
+    required this.values,
+    required this.onChanged,
+    required this.labelBuilder,
+    required this.icon,
+  });
+
+  final String title;
+  final String value;
+  final List<String> values;
+  final ValueChanged<String> onChanged;
+  final String Function(String) labelBuilder;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: title,
+        prefixIcon: Icon(icon),
+      ),
+      items: values
+          .map(
+            (item) => DropdownMenuItem<String>(
+              value: item,
+              child: Text(labelBuilder(item)),
+            ),
+          )
+          .toList(),
+      onChanged: (selected) {
+        if (selected != null) onChanged(selected);
+      },
+    );
+  }
+}
+
+class _AccountDropdown extends StatelessWidget {
+  const _AccountDropdown({
+    this.titleOverride,
+    required this.requiredType,
+    required this.selectedAccountId,
+    required this.accounts,
+    this.excludedAccountId,
+    required this.onChanged,
+  });
+
+  final String? titleOverride;
+  final String requiredType;
+  final String? selectedAccountId;
+  final List<FinancialAccount> accounts;
+  final String? excludedAccountId;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = accounts
+        .where(
+          (account) =>
+              account.accountType == requiredType &&
+              (excludedAccountId == null || account.id != excludedAccountId),
+        )
+        .toList();
+    final label = switch (requiredType) {
+      'credit_card' => 'Credit card',
+      'wallet' => 'Wallet',
+      _ => 'Bank account',
+    };
+
+    return DropdownButtonFormField<String>(
+      initialValue: selectedAccountId,
+      decoration: InputDecoration(
+        labelText: titleOverride ??
+            (options.isEmpty ? '$label (add in Profile first)' : label),
+        prefixIcon: Icon(
+          switch (requiredType) {
+            'credit_card' => Icons.credit_card_rounded,
+            'wallet' => Icons.account_balance_wallet_rounded,
+            _ => Icons.account_balance_rounded,
+          },
+        ),
+      ),
+      items: options
+          .map(
+            (account) => DropdownMenuItem<String>(
+              value: account.id,
+              child: Text(
+                account.isDefault ? '${account.name} (Default)' : account.name,
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: options.isEmpty ? null : onChanged,
     );
   }
 }
