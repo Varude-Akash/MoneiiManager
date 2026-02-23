@@ -38,10 +38,21 @@ class AudioRecorderService {
     _autoStopTimer?.cancel();
     _autoStopTimer = null;
     final path = await _recorder.stop();
-    if (path != null && File(path).existsSync()) return path;
-    return _currentPath != null && File(_currentPath!).existsSync()
+    final resolvedPath = path != null && File(path).existsSync()
+        ? path
+        : _currentPath != null && File(_currentPath!).existsSync()
         ? _currentPath
         : null;
+    if (resolvedPath == null) return null;
+
+    final size = await File(resolvedPath).length();
+    if (size > AppConstants.maxAudioUploadBytes) {
+      throw Exception(
+        'Audio is too large. Please keep voice note under ${AppConstants.maxRecordingDurationSeconds} seconds.',
+      );
+    }
+
+    return resolvedPath;
   }
 
   Future<void> dispose() async {

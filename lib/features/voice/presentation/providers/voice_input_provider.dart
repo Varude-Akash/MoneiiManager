@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:moneii_manager/features/voice/data/datasources/voice_description_remote_datasource.dart';
 import 'package:moneii_manager/features/voice/data/datasources/whisper_remote_datasource.dart';
 import 'package:moneii_manager/features/voice/data/services/audio_recorder_service.dart';
 import 'package:moneii_manager/features/voice/data/services/expense_parser_service.dart';
@@ -34,13 +33,11 @@ class VoiceError extends VoiceInputState {
 class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
   final AudioRecorderService _recorder;
   final WhisperRemoteDatasource _whisper;
-  final VoiceDescriptionRemoteDatasource _descriptionAi;
   final ExpenseParserService _parser;
 
   VoiceInputNotifier()
     : _recorder = AudioRecorderService(),
       _whisper = WhisperRemoteDatasource(),
-      _descriptionAi = VoiceDescriptionRemoteDatasource(),
       _parser = ExpenseParserService(),
       super(const VoiceIdle());
 
@@ -64,7 +61,8 @@ class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
         );
         return;
       }
-      final transcript = await _whisper.transcribe(path);
+      final result = await _whisper.transcribe(path);
+      final transcript = result.transcript;
       if (transcript.trim().isEmpty) {
         state = const VoiceError(
           'No audio transcript detected. Please try again or add manually.',
@@ -72,10 +70,7 @@ class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
         return;
       }
       final parsed = _parser.parse(transcript);
-      final aiDescription = await _safeAiDescription(
-        transcript: transcript,
-        fallbackDescription: parsed.description,
-      );
+      final aiDescription = result.description;
       state = VoiceParsed(
         aiDescription == null || aiDescription.isEmpty
             ? parsed
@@ -87,20 +82,6 @@ class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
   }
 
   void reset() => state = const VoiceIdle();
-
-  Future<String?> _safeAiDescription({
-    required String transcript,
-    required String fallbackDescription,
-  }) async {
-    try {
-      return await _descriptionAi.summarizeExpense(
-        transcript: transcript,
-        fallbackDescription: fallbackDescription,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
 
   @override
   void dispose() {
@@ -132,6 +113,10 @@ class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
         text.contains('api key') ||
         text.contains('unauthorized')) {
       return 'Voice service is unavailable right now. Please try again later or add manually.';
+    }
+    if (text.contains('daily voice ai limit reached') ||
+        text.contains('monthly voice ai limit reached')) {
+      return 'You have reached your AI voice limit. Upgrade to Premium for higher limits.';
     }
     return 'Could not process voice input. Please try again or add manually.';
   }

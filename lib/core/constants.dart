@@ -368,7 +368,8 @@ class AppCategories {
 class AppConstants {
   static const String appName = 'MoneiiManager';
   static const String defaultCurrency = 'USD';
-  static const int maxRecordingDurationSeconds = 30;
+  static const int maxRecordingDurationSeconds = 15;
+  static const int maxAudioUploadBytes = 5 * 1024 * 1024;
   static const String whisperModel = 'whisper-1';
   static const String descriptionModel = 'gpt-4o-mini';
   static const String whisperApiUrl =

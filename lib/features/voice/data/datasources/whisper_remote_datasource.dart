@@ -1,81 +1,75 @@
-import 'package:dio/dio.dart';
+import 'package:dio/dio.dart' as dio;
 import 'package:moneii_manager/config/env.dart';
-import 'package:moneii_manager/core/constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class VoiceTranscriptionResult {
+  const VoiceTranscriptionResult({
+    required this.transcript,
+    this.description,
+  });
+
+  final String transcript;
+  final String? description;
+}
 
 class WhisperRemoteDatasource {
-  final Dio _dio;
+  WhisperRemoteDatasource({dio.Dio? dioClient}) : _dio = dioClient ?? dio.Dio();
 
-  WhisperRemoteDatasource({Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              baseUrl: 'https://api.openai.com/v1',
-              headers: {'Authorization': 'Bearer ${Env.openaiApiKey}'},
-            ),
-          );
+  final dio.Dio _dio;
 
-  Future<String> transcribe(String filePath) async {
-    final prompt =
-        'Transcribe short personal expense statements with clear amounts and items, for example: spent 12 dollars on lunch.';
-
-    final verboseForm = FormData.fromMap({
-      'file': await MultipartFile.fromFile(filePath, filename: 'audio.m4a'),
-      'model': AppConstants.whisperModel,
-      'response_format': 'verbose_json',
-      'language': 'en',
-      'temperature': 0,
-      'prompt': prompt,
-    });
-
-    final verboseResponse = await _dio.post<Map<String, dynamic>>(
-      '/audio/transcriptions',
-      data: verboseForm,
-    );
-
-    final verboseData = verboseResponse.data ?? <String, dynamic>{};
-    var text = (verboseData['text'] as String?)?.trim() ?? '';
-
-    // Some responses can have segment text even when top-level text is blank.
-    if (text.isEmpty && verboseData['segments'] is List) {
-      final segments = (verboseData['segments'] as List)
-          .whereType<Map<String, dynamic>>()
-          .map((segment) => (segment['text'] as String?)?.trim() ?? '')
-          .where((value) => value.isNotEmpty)
-          .toList();
-      text = segments.join(' ').trim();
+  Future<VoiceTranscriptionResult> transcribe(String filePath) async {
+    final client = Supabase.instance.client;
+    final token = client.auth.currentSession?.accessToken;
+    if (token == null || token.isEmpty) {
+      throw Exception('You are not signed in. Please sign in and try again.');
     }
 
-    if (text.isNotEmpty) {
-      final lower = text.toLowerCase();
-      final isKnownHallucination =
-          lower.contains('www.fema.gov') ||
-          lower.contains('for more information');
-      if (!isKnownHallucination) {
-        return text;
+    late final dio.Response<Map<String, dynamic>> response;
+    try {
+      response = await _dio.post<Map<String, dynamic>>(
+        '${Env.supabaseUrl}/functions/v1/voice-transcribe',
+        data: dio.FormData.fromMap({
+          'file': await dio.MultipartFile.fromFile(
+            filePath,
+            filename: 'audio.m4a',
+          ),
+        }),
+        options: dio.Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'apikey': Env.supabaseAnonKey,
+          },
+          sendTimeout: const Duration(seconds: 25),
+          receiveTimeout: const Duration(seconds: 45),
+        ),
+      );
+    } on dio.DioException catch (error) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        final message = (data['error'] as String?)?.trim();
+        if (message != null && message.isNotEmpty) {
+          throw Exception(message);
+        }
       }
+      rethrow;
     }
 
-    // Fallback to plain text format, which can be more stable on some recordings.
-    final plainForm = FormData.fromMap({
-      'file': await MultipartFile.fromFile(filePath, filename: 'audio.m4a'),
-      'model': AppConstants.whisperModel,
-      'response_format': 'text',
-      'language': 'en',
-      'temperature': 0,
-      'prompt': prompt,
-    });
+    final data = response.data ?? <String, dynamic>{};
+    final transcript = (data['transcript'] as String?)?.trim() ?? '';
+    final description = (data['description'] as String?)?.trim();
 
-    final plainResponse = await _dio.post<String>(
-      '/audio/transcriptions',
-      data: plainForm,
-    );
-    final plainText = (plainResponse.data ?? '').trim();
-    if (plainText.isEmpty) {
+    if (transcript.isEmpty) {
       throw Exception(
-        'No transcription returned from Whisper. Please try again.',
+        (data['error'] as String?) ??
+            'No transcription returned. Please try again.',
       );
     }
-    return plainText;
+
+    return VoiceTranscriptionResult(
+      transcript: transcript,
+      description: description == null || description.isEmpty
+          ? null
+          : description,
+    );
   }
 }
