@@ -11,6 +11,7 @@ import 'package:moneii_manager/features/expenses/presentation/screens/add_expens
 import 'package:moneii_manager/features/home/presentation/screens/voice_home_screen.dart';
 import 'package:moneii_manager/features/analytics/presentation/screens/analytics_screen.dart';
 import 'package:moneii_manager/features/moneii_ai/presentation/screens/moneii_ai_screen.dart';
+import 'package:moneii_manager/features/legal/presentation/screens/legal_document_screen.dart';
 import 'package:moneii_manager/features/profile/presentation/screens/profile_screen.dart';
 import 'package:moneii_manager/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:moneii_manager/features/onboarding/presentation/providers/onboarding_provider.dart';
@@ -96,6 +97,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/moneii-ai',
             pageBuilder: (context, state) =>
                 _buildPage(state: state, child: const MoneiiAiScreen()),
+          ),
+          GoRoute(
+            path: '/privacy-policy',
+            pageBuilder: (context, state) => _buildPage(
+              state: state,
+              child: LegalDocumentScreen.privacyPolicy(),
+            ),
+          ),
+          GoRoute(
+            path: '/terms-of-service',
+            pageBuilder: (context, state) => _buildPage(
+              state: state,
+              child: LegalDocumentScreen.termsOfService(),
+            ),
           ),
         ],
       ),
