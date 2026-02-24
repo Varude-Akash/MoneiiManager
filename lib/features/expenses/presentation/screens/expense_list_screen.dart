@@ -934,14 +934,13 @@ class _ExpenseGroup extends ConsumerWidget {
               key: ValueKey(expense.id),
               endActionPane: ActionPane(
                 motion: const StretchMotion(),
-                extentRatio: 0.46,
+                extentRatio: 0.34,
                 children: [
                   SlidableAction(
                     onPressed: (_) => context.push('/add-expense', extra: expense),
                     backgroundColor: AppColors.accent.withValues(alpha: 0.25),
                     foregroundColor: AppColors.accent,
                     icon: Icons.edit_rounded,
-                    label: 'Edit',
                     borderRadius: BorderRadius.circular(16),
                   ),
                   SlidableAction(
@@ -951,9 +950,15 @@ class _ExpenseGroup extends ConsumerWidget {
                           .read(deleteExpenseProvider.notifier)
                           .deleteExpense(expense.id);
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      final messenger = ScaffoldMessenger.of(context);
+                      final deletedLabel = _transactionTypeLabel(
+                        expense.transactionType,
+                      );
+                      messenger.hideCurrentSnackBar();
+                      final controller = messenger.showSnackBar(
                         SnackBar(
-                          content: const Text('Expense deleted'),
+                          duration: const Duration(seconds: 3),
+                          content: Text('$deletedLabel entry deleted'),
                           action: SnackBarAction(
                             label: 'Undo',
                             onPressed: () {
@@ -964,11 +969,13 @@ class _ExpenseGroup extends ConsumerWidget {
                           ),
                         ),
                       );
+                      Future<void>.delayed(const Duration(seconds: 3), () {
+                        controller.close();
+                      });
                     },
                     backgroundColor: AppColors.error.withValues(alpha: 0.25),
                     foregroundColor: AppColors.error,
                     icon: Icons.delete_rounded,
-                    label: 'Delete',
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ],

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'package:moneii_manager/core/constants.dart';
 
@@ -9,15 +10,18 @@ class AudioRecorderService {
   String? _currentPath;
 
   Future<void> startRecording() async {
-    final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) {
-      throw Exception('Microphone permission is required');
+    if (!kIsWeb) {
+      final hasPermission = await _recorder.hasPermission();
+      if (!hasPermission) {
+        throw Exception('Microphone permission is required');
+      }
+
+      final dir = Directory.systemTemp;
+      _currentPath =
+          '${dir.path}/voice_input_${DateTime.now().millisecondsSinceEpoch}.m4a';
     }
 
-    final dir = Directory.systemTemp;
-    _currentPath =
-        '${dir.path}/voice_input_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
+    final recordingPath = kIsWeb ? 'audio.m4a' : _currentPath!;
     await _recorder.start(
       const RecordConfig(
         encoder: AudioEncoder.aacLc,
@@ -25,7 +29,7 @@ class AudioRecorderService {
         bitRate: 128000,
         numChannels: 1,
       ),
-      path: _currentPath!,
+      path: recordingPath,
     );
 
     _autoStopTimer = Timer(
@@ -38,6 +42,10 @@ class AudioRecorderService {
     _autoStopTimer?.cancel();
     _autoStopTimer = null;
     final path = await _recorder.stop();
+    if (kIsWeb) {
+      return path;
+    }
+
     final resolvedPath = path != null && File(path).existsSync()
         ? path
         : _currentPath != null && File(_currentPath!).existsSync()

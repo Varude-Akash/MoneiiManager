@@ -10,6 +10,7 @@ import 'package:moneii_manager/features/expenses/domain/entities/expense.dart';
 import 'package:moneii_manager/features/expenses/presentation/screens/add_expense_screen.dart';
 import 'package:moneii_manager/features/home/presentation/screens/voice_home_screen.dart';
 import 'package:moneii_manager/features/analytics/presentation/screens/analytics_screen.dart';
+import 'package:moneii_manager/features/moneii_ai/presentation/screens/moneii_ai_screen.dart';
 import 'package:moneii_manager/features/profile/presentation/screens/profile_screen.dart';
 import 'package:moneii_manager/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:moneii_manager/features/onboarding/presentation/providers/onboarding_provider.dart';
@@ -90,6 +91,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                     state.uri.queryParameters['openAddAccount'] == '1',
               ),
             ),
+          ),
+          GoRoute(
+            path: '/moneii-ai',
+            pageBuilder: (context, state) =>
+                _buildPage(state: state, child: const MoneiiAiScreen()),
           ),
         ],
       ),

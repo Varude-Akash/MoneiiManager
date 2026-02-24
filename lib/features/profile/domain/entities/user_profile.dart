@@ -10,7 +10,9 @@ class UserProfile extends Equatable {
   final String currencyPreference;
   final int currencyChangeCount;
   final int currencyChangeYear;
+  final String planTier;
   final bool isPremium;
+  bool get isPremiumPlus => planTier == 'premium_plus';
   final bool isSetupComplete;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -25,6 +27,7 @@ class UserProfile extends Equatable {
     this.currencyPreference = 'USD',
     this.currencyChangeCount = 0,
     this.currencyChangeYear = 1970,
+    this.planTier = 'free',
     this.isPremium = false,
     this.isSetupComplete = false,
     required this.createdAt,
@@ -39,9 +42,19 @@ class UserProfile extends Equatable {
     String? currencyPreference,
     int? currencyChangeCount,
     int? currencyChangeYear,
+    String? planTier,
     bool? isPremium,
     bool? isSetupComplete,
   }) {
+    final nextPlanTier =
+        planTier ??
+        (isPremium == null
+            ? this.planTier
+            : isPremium
+            ? (this.planTier == 'premium_plus' ? 'premium_plus' : 'premium')
+            : 'free');
+    final nextIsPremium = isPremium ?? (nextPlanTier != 'free');
+
     return UserProfile(
       id: id,
       displayName: displayName ?? this.displayName,
@@ -52,7 +65,8 @@ class UserProfile extends Equatable {
       currencyPreference: currencyPreference ?? this.currencyPreference,
       currencyChangeCount: currencyChangeCount ?? this.currencyChangeCount,
       currencyChangeYear: currencyChangeYear ?? this.currencyChangeYear,
-      isPremium: isPremium ?? this.isPremium,
+      planTier: nextPlanTier,
+      isPremium: nextIsPremium,
       isSetupComplete: isSetupComplete ?? this.isSetupComplete,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
@@ -60,6 +74,15 @@ class UserProfile extends Equatable {
   }
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+    final rawPlanTier = json['plan_tier'] as String?;
+    final rawIsPremium = json['is_premium'] as bool? ?? false;
+    final normalizedPlanTier = switch (rawPlanTier) {
+      'free' => 'free',
+      'premium' => 'premium',
+      'premium_plus' => 'premium_plus',
+      _ => rawIsPremium ? 'premium' : 'free',
+    };
+
     return UserProfile(
       id: json['id'] as String,
       displayName: json['display_name'] as String?,
@@ -71,7 +94,8 @@ class UserProfile extends Equatable {
       currencyChangeCount: json['currency_change_count'] as int? ?? 0,
       currencyChangeYear:
           json['currency_change_year'] as int? ?? DateTime.now().year,
-      isPremium: json['is_premium'] as bool? ?? false,
+      planTier: normalizedPlanTier,
+      isPremium: normalizedPlanTier != 'free',
       isSetupComplete: json['is_setup_complete'] as bool? ?? false,
       createdAt: DateTime.parse(
         json['created_at'] as String? ?? DateTime.now().toIso8601String(),
@@ -93,6 +117,7 @@ class UserProfile extends Equatable {
       'currency_preference': currencyPreference,
       'currency_change_count': currencyChangeCount,
       'currency_change_year': currencyChangeYear,
+      'plan_tier': planTier,
       'is_premium': isPremium,
       'is_setup_complete': isSetupComplete,
     };
@@ -109,6 +134,7 @@ class UserProfile extends Equatable {
     currencyPreference,
     currencyChangeCount,
     currencyChangeYear,
+    planTier,
     isPremium,
     isSetupComplete,
   ];

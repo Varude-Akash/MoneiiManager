@@ -733,16 +733,20 @@ class _PremiumInlineRow extends StatelessWidget {
       runSpacing: 8,
       children: [
         chip(
-          label: 'Split with friends',
-          feature: PremiumFeatureKey.sharedExpenses,
-        ),
-        chip(
-          label: 'Receipt scanner',
-          feature: PremiumFeatureKey.receiptScanner,
-        ),
-        chip(
-          label: 'AI cleaner',
+          label: 'AI insights',
           feature: PremiumFeatureKey.aiSpendingInsights,
+        ),
+        chip(
+          label: 'Smart budget',
+          feature: PremiumFeatureKey.smartBudgetRecommendations,
+        ),
+        chip(
+          label: 'Export PDF/CSV',
+          feature: PremiumFeatureKey.exportReports,
+        ),
+        chip(
+          label: 'Voice assistant',
+          feature: PremiumFeatureKey.aiFinancialCoach,
         ),
       ],
     );

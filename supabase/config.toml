@@ -1,0 +1,5 @@
+[functions.voice-transcribe]
+verify_jwt = false
+
+[functions.moneii-ai]
+verify_jwt = false

@@ -71,12 +71,12 @@ const premiumFeatureCatalog = <PremiumFeatureMeta>[
   ),
   PremiumFeatureMeta(
     key: PremiumFeatureKey.aiFinancialCoach,
-    title: 'AI Financial Coach',
-    description: 'Ask finance questions and get personalized guidance.',
+    title: 'Moneii AI',
+    description:
+        'Ask anything about your spending, income, transfers, and money trends with personalized guidance from your own data.',
   ),
 ];
 
 PremiumFeatureMeta premiumMeta(PremiumFeatureKey key) {
   return premiumFeatureCatalog.firstWhere((feature) => feature.key == key);
 }
-
