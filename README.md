@@ -36,6 +36,23 @@ SUPABASE_ANON_KEY=your-anon-key-here
 OPENAI_API_KEY=sk-your-openai-key-here
 ```
 
+For the current 2-project setup (`dev` + `prod`), use:
+
+- `.env.dev`
+- `.env.prod`
+
+Switch active env file into `.env` using scripts:
+
+```bash
+./scripts/use-dev.sh
+./scripts/use-prod.sh
+```
+
+Detailed workflow guide:
+
+- `docs/TWO_PROJECT_WORKFLOW.md`
+- `docs/OPERATIONS_PLAYBOOK.md` (single source of truth for env + backend + git + release steps)
+
 ## Supabase Setup
 
 1. Run schema + RLS migration:
