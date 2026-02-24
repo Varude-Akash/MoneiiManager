@@ -13,6 +13,7 @@ import 'package:moneii_manager/features/auth/presentation/providers/auth_provide
 import 'package:moneii_manager/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:moneii_manager/features/profile/domain/entities/financial_account.dart';
 import 'package:moneii_manager/features/profile/presentation/providers/financial_account_provider.dart';
+import 'package:moneii_manager/features/subscriptions/presentation/providers/revenuecat_provider.dart';
 import 'package:moneii_manager/shared/widgets/glass_card.dart';
 import 'package:moneii_manager/shared/widgets/shimmer_skeleton.dart';
 
@@ -198,6 +199,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final accountsAsync = ref.watch(financialAccountsProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final themeMode = ref.watch(themeModeProvider);
+    final purchases = ref.watch(revenueCatProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -522,13 +524,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Upgrade flow coming soon'),
-                            ),
-                          );
-                        },
+                        onPressed: purchases.isConfigured
+                            ? () => ref.read(revenueCatProvider.notifier).presentPaywall()
+                            : null,
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(
                             color: AppColors.primary.withValues(alpha: 0.5),
@@ -538,6 +536,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         child: const Text('Upgrade to Premium'),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: purchases.isConfigured
+                            ? () => ref.read(revenueCatProvider.notifier).restorePurchases()
+                            : null,
+                        child: const Text('Restore Purchases'),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: purchases.isConfigured
+                            ? () => ref.read(revenueCatProvider.notifier).presentCustomerCenter()
+                            : null,
+                        child: const Text('Manage Subscription'),
+                      ),
+                    ),
+                    if (purchases.errorMessage != null &&
+                        purchases.errorMessage!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          purchases.errorMessage!,
+                          style: const TextStyle(color: AppColors.error, fontSize: 12),
+                        ),
+                      ),
                   ],
                 ),
               ),

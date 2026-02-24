@@ -4,4 +4,5 @@ class Env {
   static String get supabaseUrl => dotenv.env['SUPABASE_URL'] ?? '';
   static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
   static String get openaiApiKey => dotenv.env['OPENAI_API_KEY'] ?? '';
+  static String get revenueCatApiKey => dotenv.env['REVENUECAT_API_KEY'] ?? '';
 }

@@ -2,6 +2,9 @@
 
 This is the single guide to run your app safely with your current free-tier setup.
 
+For complete structured documentation, start here:
+- `docs/project-docs/README.md`
+
 Current environment model (current repo status):
 
 - Dev Supabase project: `moneii-dev` (`enafqqntznyiyarpqvmu`)
@@ -18,6 +21,7 @@ Current environment model (current repo status):
 - `.env.dev` (dev keys)
 - `.env.prod` (prod keys)
 - `.env` (active file used by app)
+- Include `REVENUECAT_API_KEY` in both env files for subscriptions.
 
 Switch active env:
 
