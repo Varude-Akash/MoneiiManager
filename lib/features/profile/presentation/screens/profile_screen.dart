@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/config/theme_mode_provider.dart';
@@ -32,6 +33,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   String _currency = 'USD';
   bool _saving = false;
+  bool _deletingAccount = false;
   bool _notificationsEnabled = true;
   bool _settingsLoaded = false;
   bool _autoDialogHandled = false;
@@ -444,6 +446,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         setState(() => _notificationsEnabled = value);
                       },
                     ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.privacy_tip_outlined),
+                      title: const Text('Privacy Policy'),
+                      subtitle: const Text('How your data is collected and used'),
+                      onTap: () => context.push('/privacy-policy'),
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.description_outlined),
+                      title: const Text('Terms of Service'),
+                      subtitle: const Text('App usage terms and limitations'),
+                      onTap: () => context.push('/terms-of-service'),
+                    ),
                   ],
                 ),
               ),
@@ -537,6 +553,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   backgroundColor: AppColors.error,
                 ),
               ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _deletingAccount ? null : _confirmDeleteAccount,
+                icon: _deletingAccount
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_forever_rounded),
+                label: Text(
+                  _deletingAccount ? 'Deleting Account...' : 'Delete Account',
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.error),
+                  foregroundColor: AppColors.error,
+                ),
+              ),
               const SizedBox(height: 8),
               const Center(
                 child: Text(
@@ -549,6 +583,55 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: const Text(
+          'This will permanently delete your account and associated data. '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (accepted != true) return;
+    await _deleteAccount();
+  }
+
+  Future<void> _deleteAccount() async {
+    setState(() => _deletingAccount = true);
+    try {
+      await ref.read(authNotifierProvider.notifier).deleteAccount();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account deleted successfully.')),
+      );
+      context.go('/login');
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingAccount = false);
+    }
   }
 
   Future<bool> _showCurrencyChangeConfirmDialog({

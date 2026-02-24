@@ -22,11 +22,28 @@ final profileProvider = FutureProvider<UserProfile?>((ref) async {
   if (user == null) return null;
 
   final client = ref.watch(supabaseClientProvider);
-  final response = await client
+  var response = await client
       .from('profiles')
       .select()
       .eq('id', user.id)
       .maybeSingle();
+
+  if (response == null) {
+    // Backfill profile rows for users that were created before trigger setup.
+    await client.from('profiles').upsert({
+      'id': user.id,
+      'email': user.email,
+      'display_name': '',
+      'is_setup_complete': false,
+      'currency_preference': 'USD',
+    });
+
+    response = await client
+        .from('profiles')
+        .select()
+        .eq('id', user.id)
+        .maybeSingle();
+  }
 
   if (response == null) return null;
   return UserProfile.fromJson(response);
@@ -59,6 +76,38 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
 
   Future<void> signOut() async {
     await _client.auth.signOut();
+  }
+
+  Future<void> deleteAccount() async {
+    state = const AsyncValue.loading();
+    try {
+      await _client.auth.refreshSession();
+      var result = await _client.functions.invoke(
+        'delete-account',
+        method: HttpMethod.post,
+        body: {'confirm': true},
+      );
+      if (result.status == 401 || result.status == 403) {
+        await _client.auth.refreshSession();
+        result = await _client.functions.invoke(
+          'delete-account',
+          method: HttpMethod.post,
+          body: {'confirm': true},
+        );
+      }
+      if (result.status >= 400) {
+        final data = result.data;
+        final message = data is Map<String, dynamic>
+            ? ((data['error'] as String?) ?? (data['message'] as String?))
+            : null;
+        throw Exception(message ?? 'Failed to delete account. Please try again.');
+      }
+      await _client.auth.signOut();
+      state = const AsyncValue.data(null);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
   }
 
   Future<void> completeSetup(

@@ -53,6 +53,14 @@ Detailed workflow guide:
 - `docs/TWO_PROJECT_WORKFLOW.md`
 - `docs/OPERATIONS_PLAYBOOK.md` (single source of truth for env + backend + git + release steps)
 
+GitHub-friendly docs links:
+
+- [Operations Playbook](./docs/OPERATIONS_PLAYBOOK.md)
+- [Two Project Workflow](./docs/TWO_PROJECT_WORKFLOW.md)
+- [Publishing Checklist](./docs/PUBLISHING_CHECKLIST.md)
+- [Privacy Policy (template)](./docs/PRIVACY_POLICY.md)
+- [Terms of Service (template)](./docs/TERMS_OF_SERVICE.md)
+
 ## Supabase Setup
 
 1. Run schema + RLS migration:
