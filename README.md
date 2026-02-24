@@ -56,10 +56,26 @@ Detailed workflow guide:
 GitHub-friendly docs links:
 
 - [Operations Playbook](./docs/OPERATIONS_PLAYBOOK.md)
+- [Project Documentation Index](./docs/project-docs/README.md)
 - [Two Project Workflow](./docs/TWO_PROJECT_WORKFLOW.md)
 - [Publishing Checklist](./docs/PUBLISHING_CHECKLIST.md)
 - [Privacy Policy (template)](./docs/PRIVACY_POLICY.md)
 - [Terms of Service (template)](./docs/TERMS_OF_SERVICE.md)
+- [RevenueCat Setup](./docs/REVENUECAT_SETUP.md)
+
+Detailed runbooks (new):
+
+- [01 - Project Profile](./docs/project-docs/01-project-profile.md)
+- [02 - Environments and IDs](./docs/project-docs/02-environments-and-ids.md)
+- [03 - Architecture and Code Map](./docs/project-docs/03-architecture-and-code-map.md)
+- [04 - Supabase Runbook](./docs/project-docs/04-supabase-runbook.md)
+- [05 - RevenueCat Runbook](./docs/project-docs/05-revenuecat-runbook.md)
+- [06 - Local Development](./docs/project-docs/06-local-development.md)
+- [07 - Testing Checklists](./docs/project-docs/07-testing-checklists.md)
+- [08 - Git Workflow](./docs/project-docs/08-git-workflow.md)
+- [09 - Release and Deploy](./docs/project-docs/09-release-and-deploy.md)
+- [10 - Troubleshooting](./docs/project-docs/10-troubleshooting.md)
+- [11 - AI Agent Handoff](./docs/project-docs/11-ai-agent-handoff.md)
 
 ## Supabase Setup
 

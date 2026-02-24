@@ -4,6 +4,7 @@ import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/core/premium/premium_features.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
 import 'package:moneii_manager/features/moneii_ai/presentation/providers/moneii_ai_provider.dart';
+import 'package:moneii_manager/features/subscriptions/presentation/providers/revenuecat_provider.dart';
 import 'package:moneii_manager/shared/widgets/premium_gate.dart';
 
 class MoneiiAiScreen extends ConsumerStatefulWidget {
@@ -43,9 +44,12 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider).valueOrNull;
+    final purchases = ref.watch(revenueCatProvider);
     final state = ref.watch(moneiiAiProvider);
     final notifier = ref.read(moneiiAiProvider.notifier);
-    final isEligible = profile?.planTier == 'premium' || profile?.isPremiumPlus == true;
+    final isEligible = profile?.planTier == 'premium' ||
+        profile?.isPremiumPlus == true ||
+        purchases.hasMoneiiPro;
 
     ref.listen<MoneiiAiState>(moneiiAiProvider, (previous, next) {
       final message = next.errorMessage;
