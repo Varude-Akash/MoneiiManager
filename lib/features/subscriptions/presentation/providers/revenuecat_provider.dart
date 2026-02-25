@@ -151,6 +151,34 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
         entitlement: entitlement,
         preferredOfferingIdentifier: preferredOfferingIdentifier,
       );
+      final offeringSummaries = offerings.all.values
+          .map(
+            (o) => '${o.identifier}=[${o.availablePackages.map((p) => p.storeProduct.identifier).join(',')}]',
+          )
+          .join(' | ');
+      debugPrint('[RevenueCat] available offerings: $offeringSummaries');
+
+      if (entitlement == moneiiProPlusEntitlement &&
+          !_offeringHasPlusPackage(selectedOffering)) {
+        state = state.copyWith(
+          errorMessage:
+              'Premium+ is not configured in RevenueCat offerings yet. '
+              'Create an offering that contains only Plus products (e.g., MonthlyPlus/YearlyPlus).',
+        );
+        debugPrint(
+          '[RevenueCat] blocked plus paywall: selected offering has no Plus packages',
+        );
+        return null;
+      }
+
+      final selectedPackages =
+          selectedOffering?.availablePackages
+              .map((p) => '${p.identifier}:${p.storeProduct.identifier}')
+              .join(', ') ??
+          'none';
+      debugPrint(
+        '[RevenueCat] presentPaywall entitlement=$entitlement offering=${selectedOffering?.identifier ?? 'null'} packages=[$selectedPackages]',
+      );
 
       final result = await RevenueCatUI.presentPaywallIfNeeded(
         entitlement,
@@ -258,6 +286,9 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
   }) {
     if (preferredOfferingIdentifier != null &&
         offerings.all.containsKey(preferredOfferingIdentifier)) {
+      debugPrint(
+        '[RevenueCat] using preferred offering=$preferredOfferingIdentifier for entitlement=$entitlement',
+      );
       return offerings.all[preferredOfferingIdentifier];
     }
 
@@ -273,18 +304,41 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
     if (entitlement == moneiiProPlusEntitlement) {
       for (final offering in allOfferings) {
         final hasPlus = offering.availablePackages.any(isPlusPackage);
-        if (hasPlus) return offering;
+        if (hasPlus) {
+          debugPrint(
+            '[RevenueCat] selected plus offering=${offering.identifier}',
+          );
+          return offering;
+        }
       }
     }
 
     if (entitlement == moneiiProEntitlement) {
       for (final offering in allOfferings) {
         final hasNonPlus = offering.availablePackages.any((pkg) => !isPlusPackage(pkg));
-        if (hasNonPlus) return offering;
+        if (hasNonPlus) {
+          debugPrint('[RevenueCat] selected pro offering=${offering.identifier}');
+          return offering;
+        }
       }
     }
 
+    debugPrint(
+      '[RevenueCat] fallback offering=${offerings.current?.identifier ?? allOfferings.first.identifier} entitlement=$entitlement',
+    );
     return offerings.current ?? allOfferings.first;
+  }
+
+  bool _offeringHasPlusPackage(Offering? offering) {
+    if (offering == null) return false;
+    for (final pkg in offering.availablePackages) {
+      final packageId = pkg.identifier.toLowerCase();
+      final productId = pkg.storeProduct.identifier.toLowerCase();
+      if (packageId.contains('plus') || productId.contains('plus')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @override
