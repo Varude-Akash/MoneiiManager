@@ -64,18 +64,40 @@ supabase functions deploy delete-account
 supabase secrets set OPENAI_API_KEY=<YOUR_OPENAI_KEY>
 ```
 
-## 6) Run app against prod
+## 6) Android release signing (one-time)
+1. Generate upload keystore:
+```bash
+keytool -genkeypair -v \
+  -keystore android/app/upload-keystore.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias upload
+```
+
+2. Create key properties file:
+```bash
+cp android/key.properties.example android/key.properties
+```
+Edit `android/key.properties` with your real passwords.
+
+3. Build signed AAB:
+```bash
+flutter clean
+flutter pub get
+flutter build appbundle --release
+```
+
+## 7) Run app against prod
 ```bash
 ./scripts/use-prod.sh
 flutter run -d emulator-5554
 ```
 
-## 7) RevenueCat checks
+## 8) RevenueCat checks
 - `REVENUECAT_API_KEY` must exist in `.env.dev` and `.env.prod`.
 - Test paywall on Android/iOS only (not web).
-- Entitlement must be exactly: `Moneii Pro`.
+- Entitlements must be exactly: `Moneii Pro`, `Moneii Pro Plus`.
 
-## 8) Fast failure fixes
+## 9) Fast failure fixes
 
 ### APK install failed
 ```bash
@@ -96,10 +118,10 @@ Use detected id in:
 flutter run -d <device-id>
 ```
 
-## 9) Do not commit
+## 10) Do not commit
 - `.env`, `.env.dev`, `.env.prod`
 - `supabase/.temp/*`
 - Any secret keys
 
-## 10) Full documentation index
+## 11) Full documentation index
 - `docs/project-docs/README.md`

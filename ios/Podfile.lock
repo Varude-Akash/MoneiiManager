@@ -9,8 +9,22 @@ PODS:
     - FlutterMacOS
   - permission_handler_apple (9.3.0):
     - Flutter
-  - record_darwin (1.0.0):
+  - purchases_flutter (9.12.2):
     - Flutter
+    - PurchasesHybridCommon (= 17.41.0)
+  - purchases_ui_flutter (9.12.2):
+    - Flutter
+    - PurchasesHybridCommonUI (= 17.41.0)
+  - PurchasesHybridCommon (17.41.0):
+    - RevenueCat (= 5.59.2)
+  - PurchasesHybridCommonUI (17.41.0):
+    - PurchasesHybridCommon (= 17.41.0)
+    - RevenueCatUI (= 5.59.2)
+  - record_ios (1.2.0):
+    - Flutter
+  - RevenueCat (5.59.2)
+  - RevenueCatUI (5.59.2):
+    - RevenueCat (= 5.59.2)
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -26,10 +40,19 @@ DEPENDENCIES:
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
-  - record_darwin (from `.symlinks/plugins/record_darwin/ios`)
+  - purchases_flutter (from `.symlinks/plugins/purchases_flutter/ios`)
+  - purchases_ui_flutter (from `.symlinks/plugins/purchases_ui_flutter/ios`)
+  - record_ios (from `.symlinks/plugins/record_ios/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
+
+SPEC REPOS:
+  trunk:
+    - PurchasesHybridCommon
+    - PurchasesHybridCommonUI
+    - RevenueCat
+    - RevenueCatUI
 
 EXTERNAL SOURCES:
   app_links:
@@ -42,8 +65,12 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
-  record_darwin:
-    :path: ".symlinks/plugins/record_darwin/ios"
+  purchases_flutter:
+    :path: ".symlinks/plugins/purchases_flutter/ios"
+  purchases_ui_flutter:
+    :path: ".symlinks/plugins/purchases_ui_flutter/ios"
+  record_ios:
+    :path: ".symlinks/plugins/record_ios/ios"
   shared_preferences_foundation:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
   sqflite_darwin:
@@ -57,7 +84,13 @@ SPEC CHECKSUMS:
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
   path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
-  record_darwin: fb1f375f1d9603714f55b8708a903bbb91ffdb0a
+  purchases_flutter: 4d1eb4df39dc92f573069226fc6e2bafcfe3e929
+  purchases_ui_flutter: 2fad6c28a3adbaf45aa0b9b7cd69026dc9a0feec
+  PurchasesHybridCommon: 0fc10b0328a4dca5c607f845130e59f7427f4b69
+  PurchasesHybridCommonUI: b75fac3473827c68f7c3456919e5a0e18d81e5f1
+  record_ios: 412daca2350b228e698fffcd08f1f94ceb1e3844
+  RevenueCat: f352b3661288080bd8bf30bbb96e331940e73c88
+  RevenueCatUI: 5f7b3496a7fd7a16a254a6b78de2e221c117d9d2
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
