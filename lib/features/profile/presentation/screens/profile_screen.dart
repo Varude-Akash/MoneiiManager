@@ -53,6 +53,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     'Custom Categories',
   ];
 
+  static const _premiumPlusFeatures = [
+    'Account Health Score',
+    'Higher AI Assistant Limits',
+    'Higher Voice Limits',
+  ];
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -250,6 +256,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           final name = profile.displayName?.trim().isNotEmpty == true
               ? profile.displayName!
               : user?.email.split('@').first ?? 'User';
+
+          final hasPaidAccess =
+              profile.isPremium || purchases.hasMoneiiPro || purchases.hasMoneiiProPlus;
+          final effectiveTier =
+              profile.isPremiumPlus || purchases.hasMoneiiProPlus
+              ? 'premium_plus'
+              : hasPaidAccess
+              ? 'premium'
+              : 'free';
+          final tierLabel = switch (effectiveTier) {
+            'premium_plus' => 'Premium+',
+            'premium' => 'Premium',
+            _ => 'Free',
+          };
+          final tierBadgeColor = switch (effectiveTier) {
+            'premium_plus' => Colors.amber,
+            'premium' => AppColors.primary,
+            _ => AppColors.textMuted,
+          };
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
@@ -488,13 +513,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.18),
+                            color: tierBadgeColor.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            'Locked',
+                          child: Text(
+                            tierLabel,
                             style: TextStyle(
-                              color: AppColors.primary,
+                              color: tierBadgeColor,
                               fontSize: 12,
                             ),
                           ),
@@ -503,39 +528,125 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     const SizedBox(height: 8),
                     ..._premiumFeatures.map((feature) {
+                      final unlocked = effectiveTier != 'free';
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.lock_outline_rounded,
-                          color: AppColors.textMuted,
+                        leading: Icon(
+                          unlocked
+                              ? Icons.check_circle_outline_rounded
+                              : Icons.lock_outline_rounded,
+                          color: unlocked ? AppColors.success : AppColors.textMuted,
                         ),
                         title: Text(feature),
-                        subtitle: const Text('Coming soon'),
+                        subtitle: Text(unlocked ? 'Included in your plan' : 'Premium'),
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Coming Soon - Premium feature'),
-                            ),
-                          );
+                          if (!unlocked) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('This is a Premium feature.'),
+                              ),
+                            );
+                          }
                         },
                       );
                     }),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: purchases.isConfigured
-                            ? () => ref.read(revenueCatProvider.notifier).presentPaywall()
-                            : null,
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.5),
-                          ),
-                          foregroundColor: AppColors.primary,
+                    const SizedBox(height: 6),
+                    ..._premiumPlusFeatures.map((feature) {
+                      final unlocked = effectiveTier == 'premium_plus';
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          unlocked
+                              ? Icons.workspace_premium_outlined
+                              : Icons.lock_outline_rounded,
+                          color: unlocked ? Colors.amber : AppColors.textMuted,
                         ),
-                        child: const Text('Upgrade to Premium'),
+                        title: Text(feature),
+                        subtitle: Text(unlocked ? 'Included in your plan' : 'Premium+'),
+                      );
+                    }),
+                    const SizedBox(height: 10),
+                    if (effectiveTier == 'free') ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: purchases.isConfigured
+                              ? () => ref
+                                    .read(revenueCatProvider.notifier)
+                                    .presentPaywall(
+                                      entitlement: moneiiProEntitlement,
+                                    )
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.5),
+                            ),
+                            foregroundColor: AppColors.primary,
+                          ),
+                          child: const Text('Upgrade to Premium'),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: purchases.isConfigured
+                              ? () => ref
+                                    .read(revenueCatProvider.notifier)
+                                    .presentPaywall(
+                                      entitlement: moneiiProPlusEntitlement,
+                                    )
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.amber),
+                            foregroundColor: Colors.amber,
+                          ),
+                          child: const Text('Go Premium+'),
+                        ),
+                      ),
+                    ],
+                    if (effectiveTier == 'premium') ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: purchases.isConfigured
+                              ? () => ref
+                                    .read(revenueCatProvider.notifier)
+                                    .presentPaywall(
+                                      entitlement: moneiiProPlusEntitlement,
+                                    )
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.amber),
+                            foregroundColor: Colors.amber,
+                          ),
+                          child: const Text('Upgrade to Premium+'),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    if (effectiveTier == 'premium')
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'You are on Premium plan.',
+                          style: TextStyle(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    if (effectiveTier == 'premium_plus')
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'You are on Premium+ plan.',
+                          style: TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,

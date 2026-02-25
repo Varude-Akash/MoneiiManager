@@ -10,6 +10,7 @@ Future<void> showPremiumFeatureGate(
   BuildContext context, {
   required PremiumFeatureKey feature,
   required bool isPremium,
+  bool isPremiumPlus = false,
 }) async {
   final meta = premiumMeta(feature);
 
@@ -58,26 +59,73 @@ Future<void> showPremiumFeatureGate(
                 style: const TextStyle(color: AppColors.textSecondary),
               ),
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(bottomSheetContext);
-                    if (isPremium) {
+              if (isPremiumPlus)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(bottomSheetContext);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            '${meta.title} is coming soon for Premium users.',
+                            '${meta.title} is coming soon for Premium+ users.',
                           ),
                         ),
                       );
-                      return;
-                    }
-                    _handleUpgradeTap(context, feature: meta.title);
-                  },
-                  child: Text(isPremium ? 'Coming Soon' : 'Upgrade to Premium'),
+                    },
+                    child: const Text('Coming Soon'),
+                  ),
+                )
+              else if (isPremium)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(bottomSheetContext);
+                      _handleUpgradeTap(
+                        context,
+                        feature: meta.title,
+                        entitlement: moneiiProPlusEntitlement,
+                      );
+                    },
+                    child: const Text('Upgrade to Premium+'),
+                  ),
+                )
+              else ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(bottomSheetContext);
+                      _handleUpgradeTap(
+                        context,
+                        feature: meta.title,
+                        entitlement: moneiiProEntitlement,
+                      );
+                    },
+                    child: const Text('Upgrade to Premium'),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(bottomSheetContext);
+                      _handleUpgradeTap(
+                        context,
+                        feature: meta.title,
+                        entitlement: moneiiProPlusEntitlement,
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.amber),
+                      foregroundColor: Colors.amber,
+                    ),
+                    child: const Text('Go Premium+'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -89,6 +137,7 @@ Future<void> showPremiumFeatureGate(
 Future<void> _handleUpgradeTap(
   BuildContext context, {
   required String feature,
+  required String entitlement,
 }) async {
   final container = ProviderScope.containerOf(context, listen: false);
   final notifier = container.read(revenueCatProvider.notifier);
@@ -104,13 +153,13 @@ Future<void> _handleUpgradeTap(
     return;
   }
 
-  final result = await notifier.presentPaywall();
+  final result = await notifier.presentPaywall(entitlement: entitlement);
   switch (result) {
     case PaywallResult.purchased:
     case PaywallResult.restored:
       container.invalidate(profileProvider);
       messenger.showSnackBar(
-        SnackBar(content: Text('Premium unlocked. You can now use $feature.')),
+        SnackBar(content: Text('Plan unlocked. You can now use $feature.')),
       );
       break;
     case PaywallResult.cancelled:
@@ -126,7 +175,7 @@ Future<void> _handleUpgradeTap(
     case PaywallResult.notPresented:
       container.invalidate(profileProvider);
       messenger.showSnackBar(
-        const SnackBar(content: Text('You already have active premium access.')),
+        const SnackBar(content: Text('You already have active access for this plan.')),
       );
       break;
     case null:

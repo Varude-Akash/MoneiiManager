@@ -36,11 +36,12 @@ Then switch env:
 
 ## 3) RevenueCat Dashboard Configuration
 
-### 3.1 Entitlement
+### 3.1 Entitlements
 
-Create entitlement exactly:
+Create entitlements exactly:
 
 - `Moneii Pro`
+- `Moneii Pro Plus`
 
 ### 3.2 Products
 
@@ -48,6 +49,11 @@ Create two subscription products in stores and import into RevenueCat:
 
 - Monthly product id: `monthly`
 - Yearly product id: `yearly`
+
+Optional for Premium+ (recommended):
+
+- Monthly Plus product id: `monthly_plus`
+- Yearly Plus product id: `yearly_plus`
 
 ### 3.3 Packages / Offering
 
@@ -58,11 +64,15 @@ Create a current offering (e.g. `default`) with packages:
 
 Set this offering as current.
 
-### 3.4 Attach entitlement
+### 3.4 Attach entitlement(s)
 
 Attach both products (`monthly`, `yearly`) to entitlement:
 
 - `Moneii Pro`
+
+Attach plus products (`monthly_plus`, `yearly_plus`) to:
+
+- `Moneii Pro Plus`
 
 ## 4) What App Code Does
 
@@ -77,15 +87,17 @@ Code:
 - `lib/features/subscriptions/presentation/providers/revenuecat_provider.dart`
 - `lib/app.dart` (provider bootstrapped)
 
-### 4.2 Entitlement check
+### 4.2 Entitlement checks
 
-- Checks entitlement key: `Moneii Pro`
-- Exposes `hasMoneiiPro` in app state
+- Checks entitlement keys: `Moneii Pro`, `Moneii Pro Plus`
+- Exposes `hasMoneiiPro` and `hasMoneiiProPlus` in app state
 
 ### 4.3 Paywall
 
 - Premium gate now opens RevenueCat paywall
 - Uses `RevenueCatUI.presentPaywallIfNeeded('Moneii Pro')`
+- Profile supports Premium+ upsell from Premium users:
+  - `RevenueCatUI.presentPaywallIfNeeded('Moneii Pro Plus')`
 
 Code:
 
@@ -109,8 +121,10 @@ Code:
 
 Current behavior:
 
-- If `Moneii Pro` active: user is treated premium in app gating.
+- If `Moneii Pro Plus` active: user treated as `premium_plus`.
+- Else if `Moneii Pro` active: user treated premium in app gating.
 - Provider attempts to promote `profiles.plan_tier` from `free` -> `premium`.
+- Provider promotes to `premium_plus` if Plus entitlement is active.
 - It does not auto-downgrade `premium_plus` to avoid breaking manual/admin tiers.
 
 Important best practice:

@@ -510,7 +510,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         widget.initialExpense?.currency ??
         ref.watch(profileProvider).valueOrNull?.currencyPreference ??
         AppConstants.defaultCurrency;
-    final isPremium = ref.watch(profileProvider).valueOrNull?.isPremium ?? false;
+    final profile = ref.watch(profileProvider).valueOrNull;
+    final isPremium = profile?.isPremium ?? false;
+    final isPremiumPlus = profile?.isPremiumPlus ?? false;
     final addState = ref.watch(addExpenseProvider);
     final updateState = ref.watch(updateExpenseProvider);
     final isSaving = addState.isLoading || updateState.isLoading;
@@ -617,7 +619,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             ),
           ],
           const SizedBox(height: 12),
-          _PremiumInlineRow(isPremium: isPremium),
+          _PremiumInlineRow(
+            isPremium: isPremium,
+            isPremiumPlus: isPremiumPlus,
+          ),
           const SizedBox(height: 20),
           const Text(
             'Category',
@@ -689,9 +694,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 }
 
 class _PremiumInlineRow extends StatelessWidget {
-  const _PremiumInlineRow({required this.isPremium});
+  const _PremiumInlineRow({
+    required this.isPremium,
+    required this.isPremiumPlus,
+  });
 
   final bool isPremium;
+  final bool isPremiumPlus;
 
   @override
   Widget build(BuildContext context) {
@@ -704,6 +713,7 @@ class _PremiumInlineRow extends StatelessWidget {
           context,
           feature: feature,
           isPremium: isPremium,
+          isPremiumPlus: isPremiumPlus,
         ),
         borderRadius: BorderRadius.circular(100),
         child: Container(

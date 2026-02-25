@@ -58,9 +58,10 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
   Widget build(BuildContext context) {
     final state = ref.watch(voiceInputProvider);
     final notifier = ref.read(voiceInputProvider.notifier);
-    final preferredCurrency =
-        ref.watch(profileProvider).valueOrNull?.currencyPreference ?? 'USD';
-    final isPremium = ref.watch(profileProvider).valueOrNull?.isPremium ?? false;
+    final profile = ref.watch(profileProvider).valueOrNull;
+    final preferredCurrency = profile?.currencyPreference ?? 'USD';
+    final isPremium = profile?.isPremium ?? false;
+    final isPremiumPlus = profile?.isPremiumPlus ?? false;
     final currencySymbol = CurrencyUtils.symbolFor(preferredCurrency);
 
     if (state is VoiceParsed && _editableExpense == null) {
@@ -130,6 +131,7 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
                       notifier,
                       currencySymbol,
                       isPremium,
+                      isPremiumPlus,
                     ),
                   if (state is VoiceError)
                     Padding(
@@ -256,6 +258,7 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
     VoiceInputNotifier notifier,
     String currencySymbol,
     bool isPremium,
+    bool isPremiumPlus,
   ) {
     final saveLabel = switch (expense.transactionType) {
       'income' => 'Save Income',
@@ -367,6 +370,7 @@ class _VoiceInputSheetState extends ConsumerState<_VoiceInputSheet> {
                     context,
                     feature: PremiumFeatureKey.aiFinancialCoach,
                     isPremium: isPremium,
+                    isPremiumPlus: isPremiumPlus,
                   ),
                   icon: const Icon(Icons.auto_awesome_rounded, size: 16),
                   label: const Text('AI Voice Assistant (Premium)'),

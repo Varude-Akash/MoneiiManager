@@ -57,6 +57,7 @@ GitHub-friendly docs links:
 
 - [Operations Playbook](./docs/OPERATIONS_PLAYBOOK.md)
 - [Project Documentation Index](./docs/project-docs/README.md)
+- [Quickstart (Daily Use)](./docs/project-docs/QUICKSTART.md)
 - [Two Project Workflow](./docs/TWO_PROJECT_WORKFLOW.md)
 - [Publishing Checklist](./docs/PUBLISHING_CHECKLIST.md)
 - [Privacy Policy (template)](./docs/PRIVACY_POLICY.md)

@@ -4,6 +4,7 @@ This folder is the complete operational and handover documentation for this repo
 
 Use this order:
 
+0. [Quickstart (Daily Use)](./QUICKSTART.md)
 1. [01 - Project Profile](./01-project-profile.md)
 2. [02 - Environments and IDs](./02-environments-and-ids.md)
 3. [03 - Architecture and Code Map](./03-architecture-and-code-map.md)
