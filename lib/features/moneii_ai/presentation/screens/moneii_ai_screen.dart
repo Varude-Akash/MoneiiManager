@@ -49,7 +49,8 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
     final notifier = ref.read(moneiiAiProvider.notifier);
     final isEligible = profile?.planTier == 'premium' ||
         profile?.isPremiumPlus == true ||
-        purchases.hasMoneiiPro;
+        purchases.hasMoneiiPro ||
+        purchases.hasMoneiiProPlus;
 
     ref.listen<MoneiiAiState>(moneiiAiProvider, (previous, next) {
       final message = next.errorMessage;

@@ -8,17 +8,22 @@
 - `REVENUECAT_API_KEY` in `.env.dev` and `.env.prod`
 
 ## Dashboard configuration required
-1. Entitlement: `Moneii Pro`
+1. Entitlements:
+   - `Moneii Pro`
+   - `Moneii Pro Plus`
 2. Products:
    - `monthly`
    - `yearly`
-3. Offering (current/default) containing monthly + yearly packages
-4. Entitlement attached to both products
+   - optional plus products: `monthly_plus`, `yearly_plus`
+3. Offering (current/default) containing active packages
+4. Entitlement attached to corresponding products
 
 ## App behavior
 - SDK initialized via provider in app startup.
 - App user is synchronized using Supabase user id.
 - Premium gate calls `presentPaywallIfNeeded('Moneii Pro')`.
+- Premium users can upgrade to Plus from Profile via
+  `presentPaywallIfNeeded('Moneii Pro Plus')`.
 - Profile has restore + manage subscription actions.
 
 ## Critical platform notes

@@ -7,6 +7,7 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 
 const moneiiProEntitlement = 'Moneii Pro';
+const moneiiProPlusEntitlement = 'Moneii Pro Plus';
 
 class RevenueCatState {
   const RevenueCatState({
@@ -14,6 +15,7 @@ class RevenueCatState {
     this.isConfigured = false,
     this.isLoading = false,
     this.hasMoneiiPro = false,
+    this.hasMoneiiProPlus = false,
     this.currentOfferingIdentifier,
     this.availablePackageIds = const <String>[],
     this.errorMessage,
@@ -23,6 +25,7 @@ class RevenueCatState {
   final bool isConfigured;
   final bool isLoading;
   final bool hasMoneiiPro;
+  final bool hasMoneiiProPlus;
   final String? currentOfferingIdentifier;
   final List<String> availablePackageIds;
   final String? errorMessage;
@@ -32,6 +35,7 @@ class RevenueCatState {
     bool? isConfigured,
     bool? isLoading,
     bool? hasMoneiiPro,
+    bool? hasMoneiiProPlus,
     String? currentOfferingIdentifier,
     List<String>? availablePackageIds,
     String? errorMessage,
@@ -41,6 +45,7 @@ class RevenueCatState {
       isConfigured: isConfigured ?? this.isConfigured,
       isLoading: isLoading ?? this.isLoading,
       hasMoneiiPro: hasMoneiiPro ?? this.hasMoneiiPro,
+      hasMoneiiProPlus: hasMoneiiProPlus ?? this.hasMoneiiProPlus,
       currentOfferingIdentifier:
           currentOfferingIdentifier ?? this.currentOfferingIdentifier,
       availablePackageIds: availablePackageIds ?? this.availablePackageIds,
@@ -74,6 +79,7 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
         isSupported: false,
         isConfigured: false,
         hasMoneiiPro: false,
+        hasMoneiiProPlus: false,
         errorMessage: null,
       );
       return;
@@ -133,10 +139,12 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
     }
   }
 
-  Future<PaywallResult?> presentPaywall() async {
+  Future<PaywallResult?> presentPaywall({
+    String entitlement = moneiiProEntitlement,
+  }) async {
     if (!state.isConfigured) return null;
     try {
-      final result = await RevenueCatUI.presentPaywallIfNeeded(moneiiProEntitlement);
+      final result = await RevenueCatUI.presentPaywallIfNeeded(entitlement);
       await refresh();
       return result;
     } catch (error) {
@@ -172,11 +180,17 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
 
   Future<void> _updateFromCustomerInfo(CustomerInfo info) async {
     final hasPro = info.entitlements.active.containsKey(moneiiProEntitlement);
-    state = state.copyWith(hasMoneiiPro: hasPro);
-    await _syncProFlagToProfile(hasPro: hasPro);
+    final hasProPlus = info.entitlements.active.containsKey(
+      moneiiProPlusEntitlement,
+    );
+    state = state.copyWith(hasMoneiiPro: hasPro, hasMoneiiProPlus: hasProPlus);
+    await _syncTierToProfile(hasPro: hasPro, hasProPlus: hasProPlus);
   }
 
-  Future<void> _syncProFlagToProfile({required bool hasPro}) async {
+  Future<void> _syncTierToProfile({
+    required bool hasPro,
+    required bool hasProPlus,
+  }) async {
     final user = _currentUser;
     if (user == null) return;
     final client = _ref.read(supabaseClientProvider);
@@ -193,16 +207,21 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
     String nextTier = currentTier;
     bool nextPremium = currentPremium;
 
-    if (hasPro) {
+    if (hasProPlus) {
+      nextTier = 'premium_plus';
+      nextPremium = true;
+    } else if (hasPro) {
       if (currentTier == 'free') {
         nextTier = 'premium';
         nextPremium = true;
+      } else if (currentTier == 'premium_plus') {
+        // Keep premium_plus to avoid unexpected downgrade for manually assigned users.
+        nextTier = 'premium_plus';
+        nextPremium = true;
       }
-    } else {
-      if (currentTier == 'premium') {
-        nextTier = 'free';
-        nextPremium = false;
-      }
+    } else if (currentTier == 'premium') {
+      nextTier = 'free';
+      nextPremium = false;
     }
 
     if (nextTier != currentTier || nextPremium != currentPremium) {
