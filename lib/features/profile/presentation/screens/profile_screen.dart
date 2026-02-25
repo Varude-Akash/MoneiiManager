@@ -566,7 +566,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       );
                     }),
                     const SizedBox(height: 10),
-                    if (effectiveTier == 'free')
+                    if (effectiveTier == 'free') ...[
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
@@ -586,6 +586,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: const Text('Upgrade to Premium'),
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: purchases.isConfigured
+                              ? () => ref
+                                    .read(revenueCatProvider.notifier)
+                                    .presentPaywall(
+                                      entitlement: moneiiProPlusEntitlement,
+                                    )
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.amber),
+                            foregroundColor: Colors.amber,
+                          ),
+                          child: const Text('Go Premium+'),
+                        ),
+                      ),
+                    ],
                     if (effectiveTier == 'premium') ...[
                       SizedBox(
                         width: double.infinity,

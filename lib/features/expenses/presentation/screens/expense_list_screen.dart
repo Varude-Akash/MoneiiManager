@@ -92,6 +92,7 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
                       accounts: accounts,
                       profileName: profile?.displayName,
                       isPremium: profile?.isPremium ?? false,
+                      isPremiumPlus: profile?.isPremiumPlus ?? false,
                       selectedMonth: _selectedMonth,
                       preferredCurrency: preferredCurrency,
                     ),
@@ -118,6 +119,7 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
                     accounts: accounts,
                     profileName: profile?.displayName,
                     isPremium: profile?.isPremium ?? false,
+                    isPremiumPlus: profile?.isPremiumPlus ?? false,
                     selectedMonth: _selectedMonth,
                     preferredCurrency: preferredCurrency,
                   ),
@@ -394,6 +396,7 @@ class _Header extends StatelessWidget {
     required this.accounts,
     required this.profileName,
     required this.isPremium,
+    required this.isPremiumPlus,
     required this.selectedMonth,
     required this.preferredCurrency,
   });
@@ -401,6 +404,7 @@ class _Header extends StatelessWidget {
   final List<FinancialAccount> accounts;
   final String? profileName;
   final bool isPremium;
+  final bool isPremiumPlus;
   final DateTime selectedMonth;
   final String preferredCurrency;
 
@@ -486,7 +490,7 @@ class _Header extends StatelessWidget {
           ).animate().fadeIn(delay: 180.ms).slideY(begin: 0.1),
         ],
         const SizedBox(height: 12),
-        _PremiumHomeRow(isPremium: isPremium),
+        _PremiumHomeRow(isPremium: isPremium, isPremiumPlus: isPremiumPlus),
       ],
     );
   }
@@ -803,9 +807,10 @@ class _HorizontalEdgeIndicator extends StatelessWidget {
 }
 
 class _PremiumHomeRow extends StatelessWidget {
-  const _PremiumHomeRow({required this.isPremium});
+  const _PremiumHomeRow({required this.isPremium, required this.isPremiumPlus});
 
   final bool isPremium;
+  final bool isPremiumPlus;
 
   @override
   Widget build(BuildContext context) {
@@ -821,6 +826,7 @@ class _PremiumHomeRow extends StatelessWidget {
             context,
             feature: key,
             isPremium: isPremium,
+            isPremiumPlus: isPremiumPlus,
           ),
           borderRadius: BorderRadius.circular(14),
           child: Ink(

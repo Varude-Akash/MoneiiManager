@@ -141,10 +141,21 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
 
   Future<PaywallResult?> presentPaywall({
     String entitlement = moneiiProEntitlement,
+    String? preferredOfferingIdentifier,
   }) async {
     if (!state.isConfigured) return null;
     try {
-      final result = await RevenueCatUI.presentPaywallIfNeeded(entitlement);
+      final offerings = await Purchases.getOfferings();
+      final selectedOffering = _selectOfferingForEntitlement(
+        offerings: offerings,
+        entitlement: entitlement,
+        preferredOfferingIdentifier: preferredOfferingIdentifier,
+      );
+
+      final result = await RevenueCatUI.presentPaywallIfNeeded(
+        entitlement,
+        offering: selectedOffering,
+      );
       await refresh();
       return result;
     } catch (error) {
@@ -238,6 +249,42 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
       return error.message;
     }
     return error.toString().replaceFirst('Exception: ', '');
+  }
+
+  Offering? _selectOfferingForEntitlement({
+    required Offerings offerings,
+    required String entitlement,
+    String? preferredOfferingIdentifier,
+  }) {
+    if (preferredOfferingIdentifier != null &&
+        offerings.all.containsKey(preferredOfferingIdentifier)) {
+      return offerings.all[preferredOfferingIdentifier];
+    }
+
+    final allOfferings = offerings.all.values.toList(growable: false);
+    if (allOfferings.isEmpty) return offerings.current;
+
+    bool isPlusPackage(Package pkg) {
+      final packageId = pkg.identifier.toLowerCase();
+      final productId = pkg.storeProduct.identifier.toLowerCase();
+      return packageId.contains('plus') || productId.contains('plus');
+    }
+
+    if (entitlement == moneiiProPlusEntitlement) {
+      for (final offering in allOfferings) {
+        final hasPlus = offering.availablePackages.any(isPlusPackage);
+        if (hasPlus) return offering;
+      }
+    }
+
+    if (entitlement == moneiiProEntitlement) {
+      for (final offering in allOfferings) {
+        final hasNonPlus = offering.availablePackages.any((pkg) => !isPlusPackage(pkg));
+        if (hasNonPlus) return offering;
+      }
+    }
+
+    return offerings.current ?? allOfferings.first;
   }
 
   @override
