@@ -64,6 +64,11 @@ GitHub-friendly docs links:
 - [Terms of Service (template)](./docs/TERMS_OF_SERVICE.md)
 - [RevenueCat Setup](./docs/REVENUECAT_SETUP.md)
 
+Public legal pages for app stores:
+
+- [Privacy Policy (HTML)](./privacy-policy.html)
+- [Terms of Service (HTML)](./terms-of-service.html)
+
 Detailed runbooks (new):
 
 - [01 - Project Profile](./docs/project-docs/01-project-profile.md)
