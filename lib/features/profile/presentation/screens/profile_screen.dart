@@ -59,6 +59,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     'Higher Voice Limits',
   ];
 
+  static const _comingSoonFeatures = {
+    'AI Spending Insights',
+    'Investment Suggestions',
+    'Smart Budget Recommendations',
+    'Expense Predictions',
+    'Export Reports (PDF/CSV)',
+    'Custom Categories',
+    'Account Health Score',
+    'Higher Voice Limits',
+  };
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -258,7 +269,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               : user?.email.split('@').first ?? 'User';
 
           final hasPaidAccess =
-              profile.isPremium || purchases.hasMoneiiPro || purchases.hasMoneiiProPlus;
+              profile.isPremium ||
+              purchases.hasMoneiiPro ||
+              purchases.hasMoneiiProPlus;
           final effectiveTier =
               profile.isPremiumPlus || purchases.hasMoneiiProPlus
               ? 'premium_plus'
@@ -477,7 +490,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.privacy_tip_outlined),
                       title: const Text('Privacy Policy'),
-                      subtitle: const Text('How your data is collected and used'),
+                      subtitle: const Text(
+                        'How your data is collected and used',
+                      ),
                       onTap: () => context.push('/privacy-policy'),
                     ),
                     ListTile(
@@ -529,16 +544,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: 8),
                     ..._premiumFeatures.map((feature) {
                       final unlocked = effectiveTier != 'free';
+                      final isComingSoon = _comingSoonFeatures.contains(
+                        feature,
+                      );
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(
                           unlocked
                               ? Icons.check_circle_outline_rounded
                               : Icons.lock_outline_rounded,
-                          color: unlocked ? AppColors.success : AppColors.textMuted,
+                          color: unlocked
+                              ? AppColors.success
+                              : AppColors.textMuted,
                         ),
-                        title: Text(feature),
-                        subtitle: Text(unlocked ? 'Included in your plan' : 'Premium'),
+                        title: Text(
+                          isComingSoon ? '$feature (Coming soon)' : feature,
+                        ),
+                        subtitle: Text(
+                          unlocked
+                              ? (isComingSoon
+                                    ? 'Included in your plan • Coming soon'
+                                    : 'Included in your plan')
+                              : (isComingSoon
+                                    ? 'Premium • Coming soon'
+                                    : 'Premium'),
+                        ),
                         onTap: () {
                           if (!unlocked) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -553,6 +583,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: 6),
                     ..._premiumPlusFeatures.map((feature) {
                       final unlocked = effectiveTier == 'premium_plus';
+                      final isComingSoon = _comingSoonFeatures.contains(
+                        feature,
+                      );
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(
@@ -561,8 +594,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               : Icons.lock_outline_rounded,
                           color: unlocked ? Colors.amber : AppColors.textMuted,
                         ),
-                        title: Text(feature),
-                        subtitle: Text(unlocked ? 'Included in your plan' : 'Premium+'),
+                        title: Text(
+                          isComingSoon ? '$feature (Coming soon)' : feature,
+                        ),
+                        subtitle: Text(
+                          unlocked
+                              ? (isComingSoon
+                                    ? 'Included in your plan • Coming soon'
+                                    : 'Included in your plan')
+                              : (isComingSoon
+                                    ? 'Premium+ • Coming soon'
+                                    : 'Premium+'),
+                        ),
                       );
                     }),
                     const SizedBox(height: 10),
@@ -652,7 +695,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       width: double.infinity,
                       child: OutlinedButton(
                         onPressed: purchases.isConfigured
-                            ? () => ref.read(revenueCatProvider.notifier).restorePurchases()
+                            ? () => ref
+                                  .read(revenueCatProvider.notifier)
+                                  .restorePurchases()
                             : null,
                         child: const Text('Restore Purchases'),
                       ),
@@ -662,7 +707,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       width: double.infinity,
                       child: TextButton(
                         onPressed: purchases.isConfigured
-                            ? () => ref.read(revenueCatProvider.notifier).presentCustomerCenter()
+                            ? () => ref
+                                  .read(revenueCatProvider.notifier)
+                                  .presentCustomerCenter()
                             : null,
                         child: const Text('Manage Subscription'),
                       ),
@@ -673,7 +720,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           purchases.errorMessage!,
-                          style: const TextStyle(color: AppColors.error, fontSize: 12),
+                          style: const TextStyle(
+                            color: AppColors.error,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                   ],
@@ -811,7 +861,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     var isDefault = true;
 
     final added = await showDialog<bool>(
-        context: context,
+      context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -1057,7 +1107,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final parsedPrimary =
         double.tryParse(balanceController.text.trim().replaceAll(',', '')) ?? 0;
     final parsedUtilized =
-        double.tryParse(utilizedController.text.trim().replaceAll(',', '')) ?? 0;
+        double.tryParse(utilizedController.text.trim().replaceAll(',', '')) ??
+        0;
 
     if (name.isEmpty) {
       if (!mounted) return;
@@ -1099,9 +1150,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 : null,
           );
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Account updated.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Account updated.')));
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -1179,13 +1228,11 @@ class _AccountManagerSection extends StatelessWidget {
                 };
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    switch (account.accountType) {
-                      'credit_card' => Icons.credit_card_rounded,
-                      'wallet' => Icons.account_balance_wallet_rounded,
-                      _ => Icons.account_balance_rounded,
-                    },
-                  ),
+                  leading: Icon(switch (account.accountType) {
+                    'credit_card' => Icons.credit_card_rounded,
+                    'wallet' => Icons.account_balance_wallet_rounded,
+                    _ => Icons.account_balance_rounded,
+                  }),
                   title: Text(account.name),
                   subtitle: Text(
                     account.accountType == 'credit_card'
