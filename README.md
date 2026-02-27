@@ -68,6 +68,7 @@ Public legal pages for app stores:
 
 - [Privacy Policy (HTML)](./privacy-policy.html)
 - [Terms of Service (HTML)](./terms-of-service.html)
+- [Account Deletion (HTML)](./delete-account.html)
 
 Detailed runbooks (new):
 
