@@ -123,8 +123,12 @@ Deno.serve(async (req) => {
   requestId = insertResult.data?.id ?? null;
 
   try {
+    const contextDays = planTier === 'premium_plus' ? 365 : 90;
+    const contextRowLimit = planTier === 'premium_plus' ? 1500 : 300;
     const context = await buildUserContext(supabase, user.id, {
       currencyPreference: profile?.currency_preference ?? 'USD',
+      daysBack: contextDays,
+      maxTransactions: contextRowLimit,
     });
     const answer = await askModel(prompt, context);
 
@@ -163,11 +167,11 @@ Deno.serve(async (req) => {
 async function buildUserContext(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  options: { currencyPreference: string },
+  options: { currencyPreference: string; daysBack: number; maxTransactions: number },
 ) {
   const now = new Date();
-  const from90Days = new Date(now);
-  from90Days.setUTCDate(now.getUTCDate() - 90);
+  const fromDate = new Date(now);
+  fromDate.setUTCDate(now.getUTCDate() - options.daysBack);
 
   const expensesResult = await supabase
     .from('expenses')
@@ -175,9 +179,9 @@ async function buildUserContext(
       'amount, currency, transaction_type, payment_source, category_id, description, expense_date',
     )
     .eq('user_id', userId)
-    .gte('expense_date', from90Days.toISOString().slice(0, 10))
+    .gte('expense_date', fromDate.toISOString().slice(0, 10))
     .order('expense_date', { ascending: false })
-    .limit(300);
+    .limit(options.maxTransactions);
 
   const categoriesResult = await supabase.from('categories').select('id, name');
 
@@ -242,9 +246,10 @@ async function buildUserContext(
 
   return {
     generated_at: new Date().toISOString(),
+    context_days: options.daysBack,
     currency_preference: options.currencyPreference,
-    totals_90d: totals90d,
-    top_expense_categories_90d: topCategories,
+    totals_window: totals90d,
+    top_expense_categories_window: topCategories,
     recent_transactions: recent,
     account_snapshot: accountsResult.data ?? [],
   };

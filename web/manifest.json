@@ -1,6 +1,6 @@
 {
-    "name": "moneii_manager",
-    "short_name": "moneii_manager",
+    "name": "Moneii",
+    "short_name": "Moneii",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
