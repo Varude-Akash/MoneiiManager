@@ -17,16 +17,23 @@ flutter pub add purchases_flutter purchases_ui_flutter
 
 ## 2) Environment Variable
 
-Add to your local env files:
+Add `REVENUECAT_API_KEY` to your local env files with the correct key type:
 
 ```env
-REVENUECAT_API_KEY=test_VtxxJTvCkNrEneiunqbTppwsTqR
+REVENUECAT_API_KEY=<KEY_HERE>
 ```
 
 Files:
 
 - `.env.dev`
 - `.env.prod`
+
+Key rules:
+
+- Use `test_...` key only for local dev/test store testing.
+- Use Play Store public SDK key (`goog_...`) in `.env.prod` for Android releases distributed via Google Play.
+- Use Apple public SDK key (`appl_...`) in iOS builds from App Store Connect/TestFlight.
+- Never put RevenueCat secret API keys in app env files.
 
 Then switch env:
 
@@ -139,6 +146,7 @@ Important best practice:
 4. Reopen locked feature -> unlocked.
 5. Open Profile -> Manage Subscription opens Customer Center.
 6. Tap Restore Purchases -> entitlement restored on reinstall/new device.
+7. If distributed through Play closed/internal testing, install only via Play opt-in link (not direct APK) before testing purchases.
 
 ## 7) Error Handling in App
 

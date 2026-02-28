@@ -7,11 +7,11 @@ Voice-powered expense tracker built with Flutter + Supabase + OpenAI Whisper.
 - Email/password auth with onboarding + quick setup
 - Voice input flow: record -> transcribe -> parse -> edit -> save
 - Manual add/edit expense flow with category/subcategory picker
-- Expense list grouped by date, swipe edit/delete, undo
+- Expense list grouped by date, tap to edit, long-press to delete
 - Analytics dashboard (pie, bars, trend line, summary cards)
 - Profile management (avatar, optional details, currency preference)
 - Theme mode toggle (dark default), notification preference toggle
-- Premium feature placeholders with locked UX
+- Premium feature placeholders include "Coming soon" where not implemented yet
 - Micro-interactions: haptics, animated transitions, shimmer loading, first-expense confetti
 
 ## Tech Stack
@@ -110,7 +110,7 @@ flutter run
 - Setup name + optional avatar works
 - Add manual expense -> appears in Home and Analytics
 - Voice add works (with valid OpenAI key)
-- Swipe delete + undo works
+- Tap transaction opens edit, long-press opens delete confirm
 - Profile save works, theme toggle works, sign out redirects to login
 
 ## Project Structure

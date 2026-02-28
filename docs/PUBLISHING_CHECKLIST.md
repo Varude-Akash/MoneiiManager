@@ -48,6 +48,9 @@ Use this checklist before every public release.
 - [ ] Release branch merged to `main`
 - [ ] Production backend deployment done from latest `main`
 - [ ] Internal testing pass completed
+- [ ] Closed testing release published
+- [ ] At least 12 testers opted in to closed testing
+- [ ] Closed test has run for at least 14 days (for personal Play account production access)
 - [ ] Staged rollout enabled (recommended)
 
 ## 7) Security

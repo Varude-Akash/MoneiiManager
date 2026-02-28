@@ -68,9 +68,9 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
     final today = DateTime.now();
     final voiceToday = expenses.where((expense) {
       return expense.inputMethod == 'voice' &&
-          expense.expenseDate.year == today.year &&
-          expense.expenseDate.month == today.month &&
-          expense.expenseDate.day == today.day;
+          expense.createdAt.toLocal().year == today.year &&
+          expense.createdAt.toLocal().month == today.month &&
+          expense.createdAt.toLocal().day == today.day;
     }).toList();
     Widget mic = Stack(
       alignment: Alignment.center,
@@ -115,7 +115,9 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
             height: micSize + 18,
             child: CircularProgressIndicator(
               strokeWidth: 3,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.primary,
+              ),
               backgroundColor: AppColors.glassBorder.withValues(alpha: 0.35),
             ),
           ),
@@ -256,7 +258,8 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                                 child: SizedBox(
                                   height: 38,
                                   child: OutlinedButton.icon(
-                                    onPressed: () => context.push('/add-expense'),
+                                    onPressed: () =>
+                                        context.push('/add-expense'),
                                     icon: const Icon(
                                       Icons.edit_note_rounded,
                                       size: 16,
@@ -265,11 +268,12 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: AppColors.textSecondary,
                                       side: BorderSide(
-                                        color: AppColors.glassBorder.withValues(alpha: 0.75),
+                                        color: AppColors.glassBorder.withValues(
+                                          alpha: 0.75,
+                                        ),
                                       ),
-                                      backgroundColor: AppColors.surfaceLight.withValues(
-                                        alpha: 0.35,
-                                      ),
+                                      backgroundColor: AppColors.surfaceLight
+                                          .withValues(alpha: 0.35),
                                       textStyle: const TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
@@ -287,7 +291,8 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                                   height: 38,
                                   child: OutlinedButton.icon(
                                     onPressed: voiceState is VoiceError
-                                        ? () async => _onMicTap(const VoiceIdle())
+                                        ? () async =>
+                                              _onMicTap(const VoiceIdle())
                                         : () => context.go('/activity'),
                                     icon: Icon(
                                       voiceState is VoiceError
@@ -303,11 +308,12 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: AppColors.textSecondary,
                                       side: BorderSide(
-                                        color: AppColors.glassBorder.withValues(alpha: 0.75),
+                                        color: AppColors.glassBorder.withValues(
+                                          alpha: 0.75,
+                                        ),
                                       ),
-                                      backgroundColor: AppColors.surfaceLight.withValues(
-                                        alpha: 0.35,
-                                      ),
+                                      backgroundColor: AppColors.surfaceLight
+                                          .withValues(alpha: 0.35),
                                       textStyle: const TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
@@ -330,10 +336,14 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceLight.withValues(alpha: 0.48),
+                              color: AppColors.surfaceLight.withValues(
+                                alpha: 0.48,
+                              ),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: AppColors.primary.withValues(alpha: 0.35),
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.35,
+                                ),
                               ),
                             ),
                             child: Row(
@@ -350,7 +360,8 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Text(
                                         'Meet Moneii AI',
@@ -378,7 +389,8 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                                             label: 'Where did I overspend?',
                                           ),
                                           _AssistantPromptPill(
-                                            label: 'How much came in this month?',
+                                            label:
+                                                'How much came in this month?',
                                           ),
                                           _AssistantPromptPill(
                                             label: 'Any savings suggestions?',
@@ -430,8 +442,8 @@ class _PopupLikeWaveform extends StatelessWidget {
                 begin: 10,
                 end: -targetHeight,
                 duration: (350 + index * 20).ms,
-              curve: Curves.easeInOut,
-            );
+                curve: Curves.easeInOut,
+              );
         }),
       ),
     );

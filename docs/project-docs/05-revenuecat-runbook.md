@@ -6,6 +6,9 @@
 
 ## Environment key
 - `REVENUECAT_API_KEY` in `.env.dev` and `.env.prod`
+- `.env.dev`: use `test_...` (RevenueCat Test Store) for local development.
+- `.env.prod` (Play Android release): use Play public key `goog_...`.
+- iOS release builds: use Apple public key `appl_...`.
 
 ## Dashboard configuration required
 1. Entitlements:
@@ -35,6 +38,7 @@
 - If API key starts with `test_`, RevenueCat Test Store is active.
 - Test Store is for development only.
 - Before release, use platform-specific public SDK keys from a real app/store setup.
+- Purchases from Play tests require install from Play testing track opt-in link, not a sideloaded APK.
 
 ## Customer center
 Use Customer Center if you want users to self-manage subscriptions from app profile.

@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/core/constants.dart';
-import 'package:moneii_manager/core/premium/premium_features.dart';
 import 'package:moneii_manager/core/utils/currency_utils.dart';
 import 'package:moneii_manager/core/utils/date_utils.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
@@ -19,7 +18,6 @@ import 'package:moneii_manager/features/profile/domain/entities/financial_accoun
 import 'package:moneii_manager/features/profile/presentation/providers/financial_account_provider.dart';
 import 'package:moneii_manager/features/voice/domain/entities/parsed_expense.dart';
 import 'package:moneii_manager/features/voice/presentation/screens/voice_input_sheet.dart';
-import 'package:moneii_manager/shared/widgets/premium_gate.dart';
 
 class AddExpenseInitialData {
   const AddExpenseInitialData({
@@ -84,6 +82,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   String? _selectedDestinationAccountId;
   String? _accountNameHint;
   String? _rawTranscript;
+  bool _isCategoryPickerOpen = false;
 
   bool get _isEditing => widget.initialExpense != null;
 
@@ -209,6 +208,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Future<void> _save() async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
+    final client = ref.read(supabaseClientProvider);
     final selectedCurrency =
         widget.initialExpense?.currency ??
         ref.read(profileProvider).valueOrNull?.currencyPreference ??
@@ -224,7 +224,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       return;
     }
 
-    final accounts = ref.read(financialAccountsProvider).valueOrNull ?? const [];
+    final accounts =
+        ref.read(financialAccountsProvider).valueOrNull ?? const [];
     final requiredType = _requiredAccountTypeForCurrentSelection();
 
     if (requiredType != null) {
@@ -232,23 +233,19 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           .where((account) => account.accountType == requiredType)
           .toList();
       if (availableForType.isEmpty) {
-        _showError(
-          switch (requiredType) {
-            'credit_card' => 'Add at least one credit card in Profile first.',
-            'wallet' => 'Add at least one wallet in Profile first.',
-            _ => 'Add at least one bank account in Profile first.',
-          },
-        );
+        _showError(switch (requiredType) {
+          'credit_card' => 'Add at least one credit card in Profile first.',
+          'wallet' => 'Add at least one wallet in Profile first.',
+          _ => 'Add at least one bank account in Profile first.',
+        });
         return;
       }
       if (_selectedAccountId == null) {
-        _showError(
-          switch (requiredType) {
-            'credit_card' => 'Select which credit card was used.',
-            'wallet' => 'Select which wallet was used.',
-            _ => 'Select which bank account was used.',
-          },
-        );
+        _showError(switch (requiredType) {
+          'credit_card' => 'Select which credit card was used.',
+          'wallet' => 'Select which wallet was used.',
+          _ => 'Select which bank account was used.',
+        });
         return;
       }
     }
@@ -275,6 +272,35 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
       if (_selectedDestinationAccountId == _selectedAccountId) {
         _showError('From and To accounts cannot be the same.');
+        return;
+      }
+    }
+
+    final categoryRow = await client
+        .from('categories')
+        .select('id')
+        .eq('id', _selectedCategoryId!)
+        .maybeSingle();
+    if (categoryRow == null) {
+      _showError(
+        'Category data is missing in this environment. Please initialize categories and try again.',
+      );
+      return;
+    }
+
+    if (_selectedSubcategoryId != null) {
+      final subcategoryRow = await client
+          .from('categories')
+          .select('id, parent_id')
+          .eq('id', _selectedSubcategoryId!)
+          .maybeSingle();
+      final isValidSubcategory =
+          subcategoryRow != null &&
+          subcategoryRow['parent_id'] == _selectedCategoryId;
+      if (!isValidSubcategory) {
+        _showError(
+          'Selected subcategory is invalid. Please choose category again.',
+        );
         return;
       }
     }
@@ -364,7 +390,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       );
       context.pop();
     } catch (error) {
-      _showError(error.toString());
+      final message = error.toString();
+      if (message.contains('expenses_category_id_fkey')) {
+        _showError(
+          'Category data is missing in database. Please initialize categories and try again.',
+        );
+        return;
+      }
+      _showError(message);
     }
   }
 
@@ -385,7 +418,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       for (final account in candidates) {
         final name = account.name.toLowerCase();
         if (name.isNotEmpty &&
-            (transcript.contains(name) || (hint.isNotEmpty && name.contains(hint)))) {
+            (transcript.contains(name) ||
+                (hint.isNotEmpty && name.contains(hint)))) {
           _selectedAccountId = account.id;
           return;
         }
@@ -502,17 +536,40 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return '$verb $noun';
   }
 
+  String _selectedCategoryLabel(List<CategoryGroup> categoryTree) {
+    if (_selectedCategoryId == null) return 'Choose category';
+
+    CategoryGroup? selectedGroup;
+    for (final group in categoryTree) {
+      if (group.parent.id == _selectedCategoryId) {
+        selectedGroup = group;
+        break;
+      }
+    }
+    if (selectedGroup == null) return 'Choose category';
+
+    final parentName = selectedGroup.parent.name;
+    if (_selectedSubcategoryId == null) {
+      return '$parentName • Other';
+    }
+
+    for (final sub in selectedGroup.children) {
+      if (sub.id == _selectedSubcategoryId) {
+        return '$parentName • ${sub.name}';
+      }
+    }
+    return '$parentName • Other';
+  }
+
   @override
   Widget build(BuildContext context) {
     final categoryTree = ref.watch(categoryTreeProvider);
-    final accounts = ref.watch(financialAccountsProvider).valueOrNull ?? const [];
+    final accounts =
+        ref.watch(financialAccountsProvider).valueOrNull ?? const [];
     final preferredCurrency =
         widget.initialExpense?.currency ??
         ref.watch(profileProvider).valueOrNull?.currencyPreference ??
         AppConstants.defaultCurrency;
-    final profile = ref.watch(profileProvider).valueOrNull;
-    final isPremium = profile?.isPremium ?? false;
-    final isPremiumPlus = profile?.isPremiumPlus ?? false;
     final addState = ref.watch(addExpenseProvider);
     final updateState = ref.watch(updateExpenseProvider);
     final isSaving = addState.isLoading || updateState.isLoading;
@@ -546,6 +603,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          _TransactionTypeChips(
+            value: _transactionType,
+            values: AppConstants.transactionTypes,
+            onChanged: (value) => setState(() {
+              _transactionType = value;
+              _selectedAccountId = null;
+              _selectedDestinationAccountId = null;
+            }),
+            labelBuilder: _transactionTypeLabel,
+          ),
+          const SizedBox(height: 12),
           _AmountCard(
             controller: _amountController,
             currencySymbol: CurrencyUtils.symbolFor(preferredCurrency),
@@ -562,19 +630,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           ),
           const SizedBox(height: 20),
           _DatePickerTile(date: _selectedDate, onTap: _pickDate),
-          const SizedBox(height: 16),
-          _MetaDropdownRow(
-            title: 'Transaction type',
-            value: _transactionType,
-            values: AppConstants.transactionTypes,
-            onChanged: (value) => setState(() {
-              _transactionType = value;
-              _selectedAccountId = null;
-              _selectedDestinationAccountId = null;
-            }),
-            labelBuilder: _transactionTypeLabel,
-            icon: Icons.swap_horiz_rounded,
-          ),
           const SizedBox(height: 12),
           _MetaDropdownRow(
             title: 'Paid/Received via',
@@ -618,11 +673,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               },
             ),
           ],
-          const SizedBox(height: 12),
-          _PremiumInlineRow(
-            isPremium: isPremium,
-            isPremiumPlus: isPremiumPlus,
-          ),
           const SizedBox(height: 20),
           const Text(
             'Category',
@@ -633,23 +683,38 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _CategoryGrid(
-            groups: categoryTree,
-            selectedCategoryId: _selectedCategoryId,
-            onCategoryTap: (group) {
+          _CategoryPickerTile(
+            label: _selectedCategoryLabel(categoryTree),
+            isOpen: _isCategoryPickerOpen,
+            onTap: () {
               HapticFeedback.selectionClick();
               setState(() {
-                if (_selectedCategoryId == group.parent.id) {
-                  _selectedCategoryId = null;
-                  _selectedSubcategoryId = null;
-                } else {
-                  _selectedCategoryId = group.parent.id;
-                  _selectedSubcategoryId = null;
-                }
+                _isCategoryPickerOpen = !_isCategoryPickerOpen;
               });
             },
           ),
-          if (_selectedCategoryId != null && categoryTree.isNotEmpty) ...[
+          if (_isCategoryPickerOpen) ...[
+            const SizedBox(height: 12),
+            _CategoryGrid(
+              groups: categoryTree,
+              selectedCategoryId: _selectedCategoryId,
+              onCategoryTap: (group) {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  if (_selectedCategoryId == group.parent.id) {
+                    _selectedCategoryId = null;
+                    _selectedSubcategoryId = null;
+                  } else {
+                    _selectedCategoryId = group.parent.id;
+                    _selectedSubcategoryId = null;
+                  }
+                });
+              },
+            ),
+          ],
+          if (_isCategoryPickerOpen &&
+              _selectedCategoryId != null &&
+              categoryTree.isNotEmpty) ...[
             const SizedBox(height: 14),
             _SubcategoryChips(
               group: categoryTree.firstWhere(
@@ -660,10 +725,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               onTap: (subcategoryId) {
                 HapticFeedback.selectionClick();
                 setState(() {
-                  _selectedSubcategoryId =
-                      _selectedSubcategoryId == subcategoryId
-                      ? null
-                      : subcategoryId;
+                  _selectedSubcategoryId = subcategoryId;
                 });
               },
             ),
@@ -693,72 +755,88 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 }
 
-class _PremiumInlineRow extends StatelessWidget {
-  const _PremiumInlineRow({
-    required this.isPremium,
-    required this.isPremiumPlus,
+class _TransactionTypeChips extends StatelessWidget {
+  const _TransactionTypeChips({
+    required this.value,
+    required this.values,
+    required this.onChanged,
+    required this.labelBuilder,
   });
 
-  final bool isPremium;
-  final bool isPremiumPlus;
+  final String value;
+  final List<String> values;
+  final ValueChanged<String> onChanged;
+  final String Function(String) labelBuilder;
 
   @override
   Widget build(BuildContext context) {
-    Widget chip({
-      required String label,
-      required PremiumFeatureKey feature,
-    }) {
-      return InkWell(
-        onTap: () => showPremiumFeatureGate(
-          context,
-          feature: feature,
-          isPremium: isPremium,
-          isPremiumPlus: isPremiumPlus,
-        ),
-        borderRadius: BorderRadius.circular(100),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceLight,
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: AppColors.glassBorder),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.lock_rounded, size: 13, color: AppColors.primary),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: [
-        chip(
-          label: 'AI insights',
-          feature: PremiumFeatureKey.aiSpendingInsights,
+      children: values.map((item) {
+        final selected = value == item;
+        return ChoiceChip(
+          label: Text(labelBuilder(item)),
+          selected: selected,
+          onSelected: (_) => onChanged(item),
+          selectedColor: AppColors.primary.withValues(alpha: 0.3),
+          side: BorderSide(
+            color: selected ? AppColors.primary : AppColors.glassBorder,
+          ),
+          labelStyle: TextStyle(
+            color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            fontSize: 12,
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _CategoryPickerTile extends StatelessWidget {
+  const _CategoryPickerTile({
+    required this.label,
+    required this.isOpen,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isOpen;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.glassBorder),
         ),
-        chip(
-          label: 'Smart budget',
-          feature: PremiumFeatureKey.smartBudgetRecommendations,
+        child: Row(
+          children: [
+            const Icon(Icons.category_rounded, color: AppColors.textSecondary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(
+              isOpen ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              color: AppColors.textSecondary,
+            ),
+          ],
         ),
-        chip(
-          label: 'Export PDF/CSV',
-          feature: PremiumFeatureKey.exportReports,
-        ),
-        chip(
-          label: 'Voice assistant',
-          feature: PremiumFeatureKey.aiFinancialCoach,
-        ),
-      ],
+      ),
     );
   }
 }
@@ -833,10 +911,7 @@ class _MetaDropdownRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
       initialValue: value,
-      decoration: InputDecoration(
-        labelText: title,
-        prefixIcon: Icon(icon),
-      ),
+      decoration: InputDecoration(labelText: title, prefixIcon: Icon(icon)),
       items: values
           .map(
             (item) => DropdownMenuItem<String>(
@@ -887,15 +962,14 @@ class _AccountDropdown extends StatelessWidget {
     return DropdownButtonFormField<String>(
       initialValue: selectedAccountId,
       decoration: InputDecoration(
-        labelText: titleOverride ??
+        labelText:
+            titleOverride ??
             (options.isEmpty ? '$label (add in Profile first)' : label),
-        prefixIcon: Icon(
-          switch (requiredType) {
-            'credit_card' => Icons.credit_card_rounded,
-            'wallet' => Icons.account_balance_wallet_rounded,
-            _ => Icons.account_balance_rounded,
-          },
-        ),
+        prefixIcon: Icon(switch (requiredType) {
+          'credit_card' => Icons.credit_card_rounded,
+          'wallet' => Icons.account_balance_wallet_rounded,
+          _ => Icons.account_balance_rounded,
+        }),
       ),
       items: options
           .map(
@@ -979,22 +1053,23 @@ class _CategoryGrid extends StatelessWidget {
       runSpacing: 10,
       children: groups.map((group) {
         final isSelected = selectedCategoryId == group.parent.id;
+        final cardWidth = (MediaQuery.sizeOf(context).width - 68) / 3;
 
         return GestureDetector(
           onTap: () => onCategoryTap(group),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: (MediaQuery.sizeOf(context).width - 60) / 2,
+            width: cardWidth < 96 ? 96 : cardWidth,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: isSelected
                   ? group.parent.displayColor.withValues(alpha: 0.25)
-                  : AppColors.surfaceLight,
+                  : group.parent.displayColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: isSelected
                     ? group.parent.displayColor
-                    : AppColors.glassBorder,
+                    : group.parent.displayColor.withValues(alpha: 0.45),
                 width: isSelected ? 1.4 : 1,
               ),
             ),
@@ -1043,29 +1118,43 @@ class _SubcategoryChips extends StatelessWidget {
 
   final CategoryGroup group;
   final int? selectedSubcategoryId;
-  final ValueChanged<int> onTap;
+  final ValueChanged<int?> onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (group.children.isEmpty) return const SizedBox.shrink();
-
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: group.children.map((subcategory) {
-        final isSelected = selectedSubcategoryId == subcategory.id;
-
-        return ChoiceChip(
-          label: Text(subcategory.name),
-          selected: isSelected,
-          onSelected: (_) => onTap(subcategory.id),
+      children: [
+        ChoiceChip(
+          label: const Text('Other'),
+          selected: selectedSubcategoryId == null,
+          onSelected: (_) => onTap(null),
           selectedColor: AppColors.primary.withValues(alpha: 0.3),
           labelStyle: TextStyle(
-            color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+            color: selectedSubcategoryId == null
+                ? AppColors.textPrimary
+                : AppColors.textSecondary,
             fontSize: 12,
           ),
-        );
-      }).toList(),
+        ),
+        ...group.children.map((subcategory) {
+          final isSelected = selectedSubcategoryId == subcategory.id;
+
+          return ChoiceChip(
+            label: Text(subcategory.name),
+            selected: isSelected,
+            onSelected: (_) => onTap(subcategory.id),
+            selectedColor: AppColors.primary.withValues(alpha: 0.3),
+            labelStyle: TextStyle(
+              color: isSelected
+                  ? AppColors.textPrimary
+                  : AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          );
+        }),
+      ],
     );
   }
 }

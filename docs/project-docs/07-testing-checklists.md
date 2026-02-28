@@ -6,7 +6,7 @@
 3. Add manual transaction works.
 4. Voice record -> parse -> save works.
 5. Activity list shows new entry.
-6. Edit + delete work.
+6. Tap transaction opens edit, long-press opens delete confirm.
 7. Analytics reflects data.
 8. Profile loads and sign-out works.
 
@@ -20,6 +20,10 @@ Validate:
 1. Free user sees locked premium UI and paywall trigger.
 2. Premium user can access premium features.
 3. Premium Plus gets higher limits/features.
+4. Free voice limits: 3/day and 93/month.
+5. Premium voice limit: 10/day.
+6. Premium+ voice limit: product-unlimited, backend safety cap 200/day.
+7. Moneii AI limits: Premium 5/day, Premium+ 50/day.
 
 ## RevenueCat checks (mobile)
 1. Tap locked feature -> paywall opens.

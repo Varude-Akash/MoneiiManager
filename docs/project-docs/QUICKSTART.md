@@ -94,6 +94,8 @@ flutter run -d emulator-5554
 
 ## 8) RevenueCat checks
 - `REVENUECAT_API_KEY` must exist in `.env.dev` and `.env.prod`.
+- `.env.dev` should use `test_...` key.
+- `.env.prod` should use Play `goog_...` key for Android store builds.
 - Test paywall on Android/iOS only (not web).
 - Entitlements must be exactly: `Moneii Pro`, `Moneii Pro Plus`.
 
@@ -125,3 +127,10 @@ flutter run -d <device-id>
 
 ## 11) Full documentation index
 - `docs/project-docs/README.md`
+
+## 12) Play Console production gate (new personal Play accounts)
+1. Publish an internal testing release.
+2. Publish a closed testing release.
+3. Add at least 12 testers and keep them opted in.
+4. Run closed testing for at least 14 days.
+5. Then apply for production access and submit production release.

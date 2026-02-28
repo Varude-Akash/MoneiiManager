@@ -12,9 +12,8 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
-const PREMIUM_DAILY_LIMIT = 2;
-const PREMIUM_MONTHLY_LIMIT = 10;
-const PREMIUM_PLUS_MONTHLY_LIMIT = 60;
+const PREMIUM_DAILY_LIMIT = 5;
+const PREMIUM_PLUS_DAILY_LIMIT = 50;
 
 type PlanTier = 'free' | 'premium' | 'premium_plus';
 
@@ -82,39 +81,19 @@ Deno.serve(async (req) => {
   const dayStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
-  const monthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
-
   const dailyCountResult = await supabase
     .from('ai_assistant_requests')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .gte('created_at', dayStart.toISOString());
 
-  const monthlyCountResult = await supabase
-    .from('ai_assistant_requests')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .gte('created_at', monthStart.toISOString());
-
   const dailyUsed = dailyCountResult.count ?? 0;
-  const monthlyUsed = monthlyCountResult.count ?? 0;
+  const dailyLimit =
+    planTier === 'premium' ? PREMIUM_DAILY_LIMIT : PREMIUM_PLUS_DAILY_LIMIT;
 
-  const dailyLimit = planTier === 'premium' ? PREMIUM_DAILY_LIMIT : null;
-  const monthlyLimit =
-    planTier === 'premium_plus' ? PREMIUM_PLUS_MONTHLY_LIMIT : PREMIUM_MONTHLY_LIMIT;
-
-  if (dailyLimit != null && dailyUsed >= dailyLimit) {
+  if (dailyUsed >= dailyLimit) {
     return json(
       { error: 'Daily Moneii AI limit reached for your plan.' },
-      429,
-    );
-  }
-
-  if (monthlyUsed >= monthlyLimit) {
-    return json(
-      { error: 'Monthly Moneii AI limit reached for your plan.' },
       429,
     );
   }
@@ -152,8 +131,8 @@ Deno.serve(async (req) => {
         plan_tier: planTier,
         daily_used: dailyUsed + 1,
         daily_limit: dailyLimit,
-        monthly_used: monthlyUsed + 1,
-        monthly_limit: monthlyLimit,
+        monthly_used: 0,
+        monthly_limit: null,
       },
     });
   } catch (error) {

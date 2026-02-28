@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:moneii_manager/config/theme.dart';
@@ -43,7 +42,8 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
   Widget build(BuildContext context) {
     final expensesAsync = ref.watch(expensesProvider);
     final profile = ref.watch(profileProvider).valueOrNull;
-    final accounts = ref.watch(financialAccountsProvider).valueOrNull ?? const [];
+    final accounts =
+        ref.watch(financialAccountsProvider).valueOrNull ?? const [];
     final preferredCurrency = profile?.currencyPreference ?? 'USD';
     final usdRates = ref.watch(supportedExchangeRatesProvider);
     final categoryById = ref.watch(categoryByIdProvider);
@@ -176,7 +176,9 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
     }
     var earliest = expenses.first.expenseDate;
     for (final expense in expenses) {
-      if (expense.expenseDate.isBefore(earliest)) earliest = expense.expenseDate;
+      if (expense.expenseDate.isBefore(earliest)) {
+        earliest = expense.expenseDate;
+      }
     }
     return DateTime(earliest.year, earliest.month);
   }
@@ -308,7 +310,8 @@ class _TransactionMonthSelectorState extends State<_TransactionMonthSelector> {
                   controller: _controller,
                   scrollDirection: Axis.horizontal,
                   itemCount: months.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 8),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final month = months[index];
                     final selected =
@@ -482,7 +485,7 @@ class _Header extends StatelessWidget {
         if (accounts.isNotEmpty) ...[
           const SizedBox(height: 10),
           SizedBox(
-            height: 66,
+            height: 76,
             child: _AccountBalanceScroller(
               accounts: accounts,
               preferredCurrency: preferredCurrency,
@@ -510,7 +513,8 @@ class _AccountBalanceScroller extends ConsumerStatefulWidget {
       _AccountBalanceScrollerState();
 }
 
-class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller> {
+class _AccountBalanceScrollerState
+    extends ConsumerState<_AccountBalanceScroller> {
   late final ScrollController _controller;
   var _canScrollLeft = false;
   var _canScrollRight = false;
@@ -572,8 +576,8 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
                 ? 'Used ${CurrencyUtils.format(account.utilizedAmount, currency: widget.preferredCurrency)} / ${CurrencyUtils.format(account.creditLimit, currency: widget.preferredCurrency)}'
                 : null;
             return Container(
-              width: 220,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              width: 232,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
                 color: AppColors.surfaceLight,
                 borderRadius: BorderRadius.circular(14),
@@ -582,7 +586,7 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, color: AppColors.textMuted),
+                  Icon(icon, color: AppColors.textMuted, size: 19),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -596,7 +600,7 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.textSecondary,
-                            fontSize: 10,
+                            fontSize: 10.5,
                           ),
                         ),
                         const SizedBox(height: 1),
@@ -606,7 +610,7 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: balanceColor,
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -618,7 +622,7 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: AppColors.textMuted,
-                              fontSize: 9.5,
+                              fontSize: 10,
                             ),
                           ),
                         ],
@@ -628,12 +632,12 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
                   IconButton(
                     onPressed: () => _showQuickEditDialog(account),
                     tooltip: 'Quick edit',
-                    icon: const Icon(Icons.edit_rounded, size: 17),
+                    icon: const Icon(Icons.edit_rounded, size: 18),
                     color: AppColors.textMuted,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
-                      minWidth: 22,
-                      minHeight: 22,
+                      minWidth: 24,
+                      minHeight: 24,
                     ),
                     visualDensity: const VisualDensity(
                       horizontal: -3,
@@ -731,7 +735,8 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
     final primary =
         double.tryParse(primaryController.text.trim().replaceAll(',', '')) ?? 0;
     final utilized =
-        double.tryParse(utilizedController.text.trim().replaceAll(',', '')) ?? 0;
+        double.tryParse(utilizedController.text.trim().replaceAll(',', '')) ??
+        0;
 
     if (account.accountType == 'credit_card' && primary <= 0) {
       messenger.showSnackBar(
@@ -753,13 +758,15 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
             account: account,
             name: account.name,
             isDefault: account.isDefault,
-            initialBalance: account.accountType == 'credit_card' ? null : primary,
+            initialBalance: account.accountType == 'credit_card'
+                ? null
+                : primary,
             creditLimit: account.accountType == 'credit_card' ? primary : null,
-            utilizedAmount: account.accountType == 'credit_card' ? utilized : null,
+            utilizedAmount: account.accountType == 'credit_card'
+                ? utilized
+                : null,
           );
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Account updated.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Account updated.')));
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
@@ -772,10 +779,7 @@ class _AccountBalanceScrollerState extends ConsumerState<_AccountBalanceScroller
 }
 
 class _HorizontalEdgeIndicator extends StatelessWidget {
-  const _HorizontalEdgeIndicator({
-    required this.alignment,
-    required this.icon,
-  });
+  const _HorizontalEdgeIndicator({required this.alignment, required this.icon});
 
   final Alignment alignment;
   final IconData icon;
@@ -830,7 +834,7 @@ class _PremiumHomeRow extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(14),
           child: Ink(
-            padding: const EdgeInsets.all(9),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.surfaceLight,
               borderRadius: BorderRadius.circular(14),
@@ -839,14 +843,14 @@ class _PremiumHomeRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(icon, color: AppColors.primary, size: 16),
+                Icon(icon, color: AppColors.primary, size: 18),
                 const SizedBox(height: 6),
                 Text(
                   title,
                   style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                    fontSize: 13,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -854,7 +858,7 @@ class _PremiumHomeRow extends StatelessWidget {
                   subtitle,
                   style: const TextStyle(
                     color: AppColors.textMuted,
-                    fontSize: 10,
+                    fontSize: 11,
                   ),
                 ),
               ],
@@ -933,70 +937,106 @@ class _ExpenseGroup extends ConsumerWidget {
                 ? convertedAmount
                 : -convertedAmount;
             final amountPrefix = signedAmount >= 0 ? '+' : '-';
-            final amount = '$amountPrefix${CurrencyUtils.format(signedAmount.abs(), currency: preferredCurrency)}';
+            final amount =
+                '$amountPrefix${CurrencyUtils.format(signedAmount.abs(), currency: preferredCurrency)}';
             final typeLabel = _transactionTypeLabel(expense.transactionType);
 
-            return Slidable(
-              key: ValueKey(expense.id),
-              endActionPane: ActionPane(
-                motion: const StretchMotion(),
-                extentRatio: 0.34,
-                children: [
-                  SlidableAction(
-                    onPressed: (_) => context.push('/add-expense', extra: expense),
-                    backgroundColor: AppColors.accent.withValues(alpha: 0.25),
-                    foregroundColor: AppColors.accent,
-                    icon: Icons.edit_rounded,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  SlidableAction(
-                    onPressed: (_) async {
-                      HapticFeedback.lightImpact();
-                      await ref
-                          .read(deleteExpenseProvider.notifier)
-                          .deleteExpense(expense.id);
-                      if (!context.mounted) return;
-                      final messenger = ScaffoldMessenger.of(context);
-                      final deletedLabel = _transactionTypeLabel(
-                        expense.transactionType,
-                      );
-                      messenger.hideCurrentSnackBar();
-                      final controller = messenger.showSnackBar(
-                        SnackBar(
-                          duration: const Duration(seconds: 3),
-                          content: Text('$deletedLabel entry deleted'),
-                          action: SnackBarAction(
-                            label: 'Undo',
-                            onPressed: () {
-                              ref
-                                  .read(addExpenseProvider.notifier)
-                                  .addExpense(expense);
-                            },
-                          ),
-                        ),
-                      );
-                      Future<void>.delayed(const Duration(seconds: 3), () {
-                        controller.close();
-                      });
+            Future<void> deleteEntry() async {
+              HapticFeedback.lightImpact();
+              await ref
+                  .read(deleteExpenseProvider.notifier)
+                  .deleteExpense(expense.id);
+              if (!context.mounted) return;
+              final messenger = ScaffoldMessenger.of(context);
+              final deletedLabel = _transactionTypeLabel(
+                expense.transactionType,
+              );
+              messenger.hideCurrentSnackBar();
+              final controller = messenger.showSnackBar(
+                SnackBar(
+                  duration: const Duration(seconds: 3),
+                  content: Text('$deletedLabel entry deleted'),
+                  action: SnackBarAction(
+                    label: 'Undo',
+                    onPressed: () {
+                      ref.read(addExpenseProvider.notifier).addExpense(expense);
                     },
-                    backgroundColor: AppColors.error.withValues(alpha: 0.25),
-                    foregroundColor: AppColors.error,
-                    icon: Icons.delete_rounded,
-                    borderRadius: BorderRadius.circular(16),
                   ),
-                ],
-              ),
+                ),
+              );
+              Future<void>.delayed(const Duration(seconds: 3), () {
+                controller.close();
+              });
+            }
+
+            Future<void> showDeleteOptions() async {
+              final shouldDelete = await showModalBottomSheet<bool>(
+                context: context,
+                backgroundColor: AppColors.surface,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                ),
+                builder: (sheetContext) {
+                  return SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(
+                              Icons.delete_rounded,
+                              color: AppColors.error,
+                            ),
+                            title: const Text(
+                              'Delete transaction',
+                              style: TextStyle(color: AppColors.textPrimary),
+                            ),
+                            subtitle: const Text(
+                              'This can be undone from the snackbar.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                            onTap: () => Navigator.of(sheetContext).pop(true),
+                          ),
+                          ListTile(
+                            leading: const Icon(
+                              Icons.close_rounded,
+                              color: AppColors.textMuted,
+                            ),
+                            title: const Text(
+                              'Cancel',
+                              style: TextStyle(color: AppColors.textPrimary),
+                            ),
+                            onTap: () => Navigator.of(sheetContext).pop(false),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+
+              if (shouldDelete == true) {
+                await deleteEntry();
+              }
+            }
+
+            return GestureDetector(
+              key: ValueKey(expense.id),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => context.push('/add-expense', extra: expense),
+              onLongPress: showDeleteOptions,
               child: GlassCard(
-                margin: const EdgeInsets.only(bottom: 6),
+                margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
+                  horizontal: 12,
+                  vertical: 10,
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 30,
-                      height: 30,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color:
@@ -1007,7 +1047,7 @@ class _ExpenseGroup extends ConsumerWidget {
                         category?.iconData ?? Icons.payments_rounded,
                         color:
                             category?.displayColor ?? AppColors.categoryOther,
-                        size: 14,
+                        size: 16,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1022,7 +1062,7 @@ class _ExpenseGroup extends ConsumerWidget {
                                 : categoryName,
                             style: const TextStyle(
                               color: AppColors.textPrimary,
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1034,7 +1074,7 @@ class _ExpenseGroup extends ConsumerWidget {
                                 : '$categoryName • $typeLabel',
                             style: const TextStyle(
                               color: AppColors.textMuted,
-                              fontSize: 10,
+                              fontSize: 11,
                             ),
                           ),
                         ],
@@ -1045,7 +1085,7 @@ class _ExpenseGroup extends ConsumerWidget {
                       amount,
                       style: const TextStyle(
                         color: AppColors.textPrimary,
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

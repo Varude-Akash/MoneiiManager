@@ -10,11 +10,13 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
-const FREE_DAILY_LIMIT = 20;
-const FREE_MONTHLY_LIMIT = 200;
-const PREMIUM_DAILY_LIMIT = 50;
-const PREMIUM_MONTHLY_LIMIT = 1000;
+const FREE_DAILY_LIMIT = 3;
+const FREE_MONTHLY_LIMIT = 93;
+const PREMIUM_DAILY_LIMIT = 10;
+// Premium+ is product-unlimited for voice, but keep a hard backend safety cap.
+const VOICE_DAILY_HARD_SAFETY_LIMIT = 200;
 const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+type PlanTier = 'free' | 'premium' | 'premium_plus';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -48,13 +50,20 @@ Deno.serve(async (req) => {
 
   const profileResult = await supabase
     .from('profiles')
-    .select('is_premium')
+    .select('plan_tier, is_premium')
     .eq('id', user.id)
     .single();
-
-  const isPremium = profileResult.data?.is_premium == true;
-  const dailyLimit = isPremium ? PREMIUM_DAILY_LIMIT : FREE_DAILY_LIMIT;
-  const monthlyLimit = isPremium ? PREMIUM_MONTHLY_LIMIT : FREE_MONTHLY_LIMIT;
+  const planTier = resolvePlanTier(
+    profileResult.data?.plan_tier,
+    profileResult.data?.is_premium,
+  );
+  const dailyLimit =
+    planTier === 'free'
+      ? FREE_DAILY_LIMIT
+      : planTier === 'premium'
+      ? PREMIUM_DAILY_LIMIT
+      : null;
+  const monthlyLimit = planTier === 'free' ? FREE_MONTHLY_LIMIT : null;
 
   const now = new Date();
   const dayStart = new Date(
@@ -79,21 +88,29 @@ Deno.serve(async (req) => {
   const dailyUsed = dailyCountResult.count ?? 0;
   const monthlyUsed = monthlyCountResult.count ?? 0;
 
-  if (dailyUsed >= dailyLimit) {
+  if (dailyUsed >= VOICE_DAILY_HARD_SAFETY_LIMIT) {
     return json(
       {
         error:
-          'Daily voice AI limit reached. Upgrade to Premium for higher limits.',
+          'Daily voice AI safety limit reached. Please contact support if this is unexpected.',
       },
       429,
     );
   }
 
-  if (monthlyUsed >= monthlyLimit) {
+  if (dailyLimit != null && dailyUsed >= dailyLimit) {
     return json(
       {
-        error:
-          'Monthly voice AI limit reached. Upgrade to Premium for higher limits.',
+        error: 'Daily voice AI limit reached for your plan.',
+      },
+      429,
+    );
+  }
+
+  if (monthlyLimit != null && monthlyUsed >= monthlyLimit) {
+    return json(
+      {
+        error: 'Monthly voice AI limit reached for your plan.',
       },
       429,
     );
@@ -192,6 +209,16 @@ async function transcribeWithFallback(file: File): Promise<string> {
     prompt,
   });
   return String(plain ?? '').trim();
+}
+
+function resolvePlanTier(
+  planTierRaw: unknown,
+  isPremiumRaw: unknown,
+): PlanTier {
+  if (planTierRaw === 'premium_plus') return 'premium_plus';
+  if (planTierRaw === 'premium') return 'premium';
+  if (planTierRaw === 'free') return 'free';
+  return isPremiumRaw === true ? 'premium' : 'free';
 }
 
 function isKnownHallucination(text: string): boolean {

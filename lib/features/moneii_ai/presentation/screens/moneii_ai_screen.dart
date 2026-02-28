@@ -47,19 +47,22 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
     final purchases = ref.watch(revenueCatProvider);
     final state = ref.watch(moneiiAiProvider);
     final notifier = ref.read(moneiiAiProvider.notifier);
-    final isEligible = profile?.planTier == 'premium' ||
+    final isEligible =
+        profile?.planTier == 'premium' ||
         profile?.isPremiumPlus == true ||
         purchases.hasMoneiiPro ||
         purchases.hasMoneiiProPlus;
 
     ref.listen<MoneiiAiState>(moneiiAiProvider, (previous, next) {
       final message = next.errorMessage;
-      if (message == null || message.isEmpty || message == previous?.errorMessage) {
+      if (message == null ||
+          message.isEmpty ||
+          message == previous?.errorMessage) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 3)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+      );
       notifier.clearError();
     });
 
@@ -88,15 +91,19 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                         monthlyLimit: state.monthlyLimit,
                       ),
                       const SizedBox(height: 10),
-                      _QuickPrompts(onTap: (value) {
-                        _controller.text = value;
-                        _send();
-                      }),
+                      _QuickPrompts(
+                        onTap: (value) {
+                          _controller.text = value;
+                          _send();
+                        },
+                      ),
                       const SizedBox(height: 10),
                       Expanded(
                         child: Container(
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceLight.withValues(alpha: 0.35),
+                            color: AppColors.surfaceLight.withValues(
+                              alpha: 0.35,
+                            ),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppColors.glassBorder),
                           ),
@@ -104,7 +111,8 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                             controller: _scrollController,
                             padding: const EdgeInsets.all(12),
                             itemCount: state.messages.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 8),
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final item = state.messages[index];
                               final isUser = item.role == 'user';
@@ -113,16 +121,22 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                                     ? Alignment.centerRight
                                     : Alignment.centerLeft,
                                 child: Container(
-                                  constraints: const BoxConstraints(maxWidth: 520),
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 520,
+                                  ),
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
                                     color: isUser
-                                        ? AppColors.primary.withValues(alpha: 0.25)
+                                        ? AppColors.primary.withValues(
+                                            alpha: 0.25,
+                                          )
                                         : AppColors.surface,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: isUser
-                                          ? AppColors.primary.withValues(alpha: 0.45)
+                                          ? AppColors.primary.withValues(
+                                              alpha: 0.45,
+                                            )
                                           : AppColors.glassBorder,
                                     ),
                                   ),
@@ -153,17 +167,23 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                                 hintText:
                                     'Ask about spending trends, income, transfers, or suggestions...',
                                 filled: true,
-                                fillColor: AppColors.surfaceLight.withValues(alpha: 0.4),
+                                fillColor: AppColors.surfaceLight.withValues(
+                                  alpha: 0.4,
+                                ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
                                   borderSide: BorderSide(
-                                    color: AppColors.glassBorder.withValues(alpha: 0.8),
+                                    color: AppColors.glassBorder.withValues(
+                                      alpha: 0.8,
+                                    ),
                                   ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
                                   borderSide: BorderSide(
-                                    color: AppColors.glassBorder.withValues(alpha: 0.8),
+                                    color: AppColors.glassBorder.withValues(
+                                      alpha: 0.8,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -282,7 +302,8 @@ class _UsageStrip extends StatelessWidget {
             _UsageChip(label: 'Today', value: '$dailyUsed/$dailyLimit')
           else
             _UsageChip(label: 'Today', value: '$dailyUsed'),
-          _UsageChip(label: 'Month', value: '$monthlyUsed/$monthlyLimit'),
+          if (monthlyLimit > 0)
+            _UsageChip(label: 'Month', value: '$monthlyUsed/$monthlyLimit'),
         ],
       ),
     );
@@ -336,7 +357,10 @@ class _QuickPrompts extends StatelessWidget {
           ),
           child: Text(
             value,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
           ),
         ),
       );
