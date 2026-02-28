@@ -24,6 +24,9 @@ Validate:
 5. Premium voice limit: 10/day.
 6. Premium+ voice limit: product-unlimited, backend safety cap 200/day.
 7. Moneii AI limits: Premium 5/day, Premium+ 50/day.
+8. Moneii AI response is plain natural text (no forced Summary/Insights/Next Steps format).
+9. Moneii AI response never exceeds 200 words.
+10. Moneii AI month tabs show current + previous 2 months, and older tabs are read-only.
 
 ## RevenueCat checks (mobile)
 1. Tap locked feature -> paywall opens.

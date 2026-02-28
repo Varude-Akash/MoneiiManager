@@ -43,3 +43,8 @@
 7. Premium feature taps go through `premium_gate`:
    - if premium in profile or entitlement active, allow
    - else show RevenueCat paywall.
+8. Moneii AI:
+   - stores successful Q/A in `ai_assistant_requests`
+   - keeps last 3 months of history
+   - allows new messages only in current month view (older months read-only)
+   - response style is natural plain text with hard max 200 words

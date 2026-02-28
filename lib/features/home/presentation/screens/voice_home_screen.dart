@@ -56,7 +56,10 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
       }
     });
 
-    final expenses = ref.watch(expensesProvider).valueOrNull ?? const [];
+    final voiceTodayCount = ref.watch(voiceEntryTodayCountProvider).maybeWhen(
+      data: (value) => value,
+      orElse: () => 0,
+    );
     final voiceState = ref.watch(voiceInputProvider);
     final isRecording = voiceState is VoiceRecording;
     final isTranscribing = voiceState is VoiceTranscribing;
@@ -66,12 +69,6 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
     final micSize = compactScreen ? 148.0 : 168.0;
     final micIconSize = compactScreen ? 60.0 : 68.0;
     final today = DateTime.now();
-    final voiceToday = expenses.where((expense) {
-      return expense.inputMethod == 'voice' &&
-          expense.createdAt.toLocal().year == today.year &&
-          expense.createdAt.toLocal().month == today.month &&
-          expense.createdAt.toLocal().day == today.day;
-    }).toList();
     Widget mic = Stack(
       alignment: Alignment.center,
       children: [
@@ -180,7 +177,7 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                         Text(
                           isTranscribing
                               ? 'Processing your voice...'
-                              : 'One tap, then speak your money move: spent, earned, transferred, or paid card bill.',
+                              : 'Tap once and speak naturally in any language.',
                           style: const TextStyle(color: AppColors.textPrimary),
                           textAlign: TextAlign.center,
                         ),
@@ -222,11 +219,21 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                         ],
                         const SizedBox(height: 8),
                         Text(
-                          '${voiceToday.length} voice entr${voiceToday.length == 1 ? 'y' : 'ies'} today',
+                          '$voiceTodayCount voice entr${voiceTodayCount == 1 ? 'y' : 'ies'} today',
                           style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 12,
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Talk your way, any accent, any flow. Moneii keeps up.',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                         SizedBox(height: compactScreen ? 8 : 10),
                         const Text(

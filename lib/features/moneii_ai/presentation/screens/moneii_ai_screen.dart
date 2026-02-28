@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/core/premium/premium_features.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
@@ -47,6 +48,11 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
     final purchases = ref.watch(revenueCatProvider);
     final state = ref.watch(moneiiAiProvider);
     final notifier = ref.read(moneiiAiProvider.notifier);
+    final now = DateTime.now();
+    final selectedMonth =
+        state.selectedMonthStart ?? DateTime(now.year, now.month);
+    final isCurrentMonthSelected =
+        selectedMonth.year == now.year && selectedMonth.month == now.month;
     final isEligible =
         profile?.planTier == 'premium' ||
         profile?.isPremiumPlus == true ||
@@ -83,15 +89,44 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                   )
                 : Column(
                     children: [
-                      _UsageStrip(
-                        planTier: profile?.planTier ?? state.planTier,
-                        dailyUsed: state.dailyUsed,
-                        dailyLimit: state.dailyLimit,
-                        monthlyUsed: state.monthlyUsed,
-                        monthlyLimit: state.monthlyLimit,
+                      if (state.isBootstrapping)
+                        const LinearProgressIndicator(minHeight: 2),
+                      if (state.isBootstrapping) const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _MonthSelector(
+                          months: state.availableMonths,
+                          selectedMonth: selectedMonth,
+                          onSelected: notifier.selectMonth,
+                        ),
                       ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _UsageStrip(
+                          planTier: profile?.planTier ?? state.planTier,
+                          dailyUsed: state.dailyUsed,
+                          dailyLimit: state.dailyLimit,
+                          monthlyUsed: state.monthlyUsed,
+                          monthlyLimit: state.monthlyLimit,
+                        ),
+                      ),
+                      if (!isCurrentMonthSelected) ...[
+                        const SizedBox(height: 6),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Read-only month. Switch to current month to send new questions.',
+                            style: TextStyle(
+                              color: AppColors.warning,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       _QuickPrompts(
+                        enabled: isCurrentMonthSelected,
                         onTap: (value) {
                           _controller.text = value;
                           _send();
@@ -102,14 +137,18 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: AppColors.surfaceLight.withValues(
-                              alpha: 0.35,
+                              alpha: 0.30,
                             ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.glassBorder),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppColors.glassBorder.withValues(
+                                alpha: 0.9,
+                              ),
+                            ),
                           ),
                           child: ListView.separated(
                             controller: _scrollController,
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
                             itemCount: state.messages.length,
                             separatorBuilder: (_, _) =>
                                 const SizedBox(height: 8),
@@ -122,22 +161,34 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                                     : Alignment.centerLeft,
                                 child: Container(
                                   constraints: const BoxConstraints(
-                                    maxWidth: 520,
+                                    maxWidth: 560,
                                   ),
-                                  padding: const EdgeInsets.all(10),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: isUser
                                         ? AppColors.primary.withValues(
-                                            alpha: 0.25,
+                                            alpha: 0.26,
                                           )
-                                        : AppColors.surface,
-                                    borderRadius: BorderRadius.circular(12),
+                                        : AppColors.surface.withValues(
+                                            alpha: 0.95,
+                                          ),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: const Radius.circular(14),
+                                      topRight: const Radius.circular(14),
+                                      bottomLeft: Radius.circular(isUser ? 14 : 6),
+                                      bottomRight: Radius.circular(isUser ? 6 : 14),
+                                    ),
                                     border: Border.all(
                                       color: isUser
                                           ? AppColors.primary.withValues(
-                                              alpha: 0.45,
+                                              alpha: 0.55,
                                             )
-                                          : AppColors.glassBorder,
+                                          : AppColors.glassBorder.withValues(
+                                              alpha: 0.75,
+                                            ),
                                     ),
                                   ),
                                   child: Text(
@@ -155,6 +206,7 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                       ),
                       const SizedBox(height: 10),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Expanded(
                             child: TextField(
@@ -162,16 +214,21 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                               minLines: 1,
                               maxLines: 3,
                               textInputAction: TextInputAction.send,
-                              onSubmitted: (_) => _send(),
+                              onSubmitted: (_) {
+                                if (isCurrentMonthSelected) _send();
+                              },
+                              enabled: isCurrentMonthSelected,
                               decoration: InputDecoration(
                                 hintText:
-                                    'Ask about spending trends, income, transfers, or suggestions...',
+                                    isCurrentMonthSelected
+                                    ? 'Ask anything about your money...'
+                                    : 'Read-only month selected. Switch to current month to ask.',
                                 filled: true,
                                 fillColor: AppColors.surfaceLight.withValues(
-                                  alpha: 0.4,
+                                  alpha: 0.55,
                                 ),
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                                  borderRadius: BorderRadius.circular(18),
                                   borderSide: BorderSide(
                                     color: AppColors.glassBorder.withValues(
                                       alpha: 0.8,
@@ -179,21 +236,37 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                                   ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                                  borderRadius: BorderRadius.circular(18),
                                   borderSide: BorderSide(
                                     color: AppColors.glassBorder.withValues(
                                       alpha: 0.8,
                                     ),
                                   ),
                                 ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(
+                                    color: AppColors.primary.withValues(alpha: 0.7),
+                                    width: 1.2,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           SizedBox(
-                            height: 48,
+                            height: 54,
+                            width: 54,
                             child: ElevatedButton(
-                              onPressed: state.isLoading ? null : _send,
+                              onPressed: state.isLoading || !isCurrentMonthSelected
+                                  ? null
+                                  : _send,
+                              style: ElevatedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: EdgeInsets.zero,
+                              ),
                               child: state.isLoading
                                   ? const SizedBox(
                                       width: 18,
@@ -212,6 +285,59 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
                   ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MonthSelector extends StatelessWidget {
+  const _MonthSelector({
+    required this.months,
+    required this.selectedMonth,
+    required this.onSelected,
+  });
+
+  final List<DateTime> months;
+  final DateTime selectedMonth;
+  final ValueChanged<DateTime> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatter = DateFormat('MMM yyyy');
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final month in months)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(formatter.format(month)),
+                selected:
+                    month.year == selectedMonth.year &&
+                    month.month == selectedMonth.month,
+                onSelected: (_) => onSelected(month),
+                selectedColor: AppColors.primary.withValues(alpha: 0.28),
+                backgroundColor: AppColors.surface.withValues(alpha: 0.6),
+                side: BorderSide(
+                  color:
+                      month.year == selectedMonth.year &&
+                          month.month == selectedMonth.month
+                      ? AppColors.primary.withValues(alpha: 0.75)
+                      : AppColors.glassBorder,
+                ),
+                showCheckmark: false,
+                labelStyle: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight:
+                      month.year == selectedMonth.year &&
+                          month.month == selectedMonth.month
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -285,80 +411,63 @@ class _UsageStrip extends StatelessWidget {
       _ => 'Free',
     };
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.glassBorder),
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _UsageChip(label: 'Plan', value: planLabel),
-          if (dailyLimit != null)
-            _UsageChip(label: 'Today', value: '$dailyUsed/$dailyLimit')
-          else
-            _UsageChip(label: 'Today', value: '$dailyUsed'),
-          if (monthlyLimit > 0)
-            _UsageChip(label: 'Month', value: '$monthlyUsed/$monthlyLimit'),
-        ],
-      ),
-    );
-  }
-}
-
-class _UsageChip extends StatelessWidget {
-  const _UsageChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: AppColors.glassBorder),
-      ),
-      child: Text(
-        '$label: $value',
-        style: const TextStyle(
-          color: AppColors.textSecondary,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
+    return Wrap(
+      spacing: 10,
+      runSpacing: 4,
+      children: [
+        Text(
+          'Plan: $planLabel',
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
         ),
-      ),
+        Text(
+          dailyLimit != null ? 'Today: $dailyUsed/$dailyLimit' : 'Today: $dailyUsed',
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+        if (monthlyLimit > 0)
+          Text(
+            'Month: $monthlyUsed/$monthlyLimit',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+      ],
     );
   }
 }
 
 class _QuickPrompts extends StatelessWidget {
-  const _QuickPrompts({required this.onTap});
+  const _QuickPrompts({required this.onTap, required this.enabled});
 
   final ValueChanged<String> onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     Widget prompt(String value) {
       return InkWell(
-        onTap: () => onTap(value),
+        onTap: enabled ? () => onTap(value) : null,
         borderRadius: BorderRadius.circular(100),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.16),
+            color: AppColors.primary.withValues(alpha: enabled ? 0.16 : 0.08),
             borderRadius: BorderRadius.circular(100),
             border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
           ),
           child: Text(
             value,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: enabled ? AppColors.textSecondary : AppColors.textMuted,
               fontSize: 12,
             ),
           ),
@@ -366,14 +475,14 @@ class _QuickPrompts extends StatelessWidget {
       );
     }
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
         children: [
           prompt('Where did I overspend this month?'),
+          const SizedBox(width: 8),
           prompt('How much income came in this month?'),
+          const SizedBox(width: 8),
           prompt('Give me 3 savings suggestions.'),
         ],
       ),

@@ -81,6 +81,17 @@ Deno.serve(async (req) => {
   const dayStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
+  const retentionStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1),
+  );
+
+  // Keep only recent 3-month chat records per user.
+  await supabase
+    .from('ai_assistant_requests')
+    .delete()
+    .eq('user_id', user.id)
+    .lt('created_at', retentionStart.toISOString());
+
   const dailyCountResult = await supabase
     .from('ai_assistant_requests')
     .select('id', { count: 'exact', head: true })
@@ -245,7 +256,10 @@ async function askModel(prompt: string, userContext: unknown): Promise<string> {
     'Use ONLY the provided user data context. ' +
     'If data is missing, say exactly what is missing. ' +
     'Never claim external or real-time market facts. ' +
-    'Keep response concise with these sections: Summary, Insights, Next steps.';
+    'Answer naturally in plain text based on what the user asked. ' +
+    'Do not force any fixed format or headings. ' +
+    'Keep answers concise and never exceed 200 words. ' +
+    'Do not use markdown symbols like **, #, or bullet markdown.';
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -280,7 +294,42 @@ async function askModel(prompt: string, userContext: unknown): Promise<string> {
   if (!content) {
     throw new Error('Moneii AI returned an empty response. Please retry.');
   }
-  return content;
+  const wordCount = countWords(content);
+  if (wordCount <= 200) return content;
+
+  const rewriteResponse = await fetch(
+    'https://api.openai.com/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.1,
+        max_tokens: 300,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Rewrite the answer in plain text under 200 words. Keep all important meaning. No markdown.',
+          },
+          { role: 'user', content },
+        ],
+      }),
+    },
+  );
+
+  if (!rewriteResponse.ok) {
+    return enforceMaxWords(content, 200);
+  }
+  const rewriteData = (await rewriteResponse.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const rewritten = rewriteData.choices?.[0]?.message?.content?.trim();
+  if (!rewritten) return enforceMaxWords(content, 200);
+  return enforceMaxWords(rewritten, 200);
 }
 
 function resolvePlanTier(
@@ -308,4 +357,15 @@ function json(data: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+function countWords(text: string): number {
+  const words = text.trim().split(/\s+/).filter((word) => word.length > 0);
+  return words.length;
+}
+
+function enforceMaxWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/).filter((word) => word.length > 0);
+  if (words.length <= maxWords) return text.trim();
+  return `${words.slice(0, maxWords).join(' ').trim()}.`;
 }

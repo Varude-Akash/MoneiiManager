@@ -9,6 +9,7 @@ Voice-powered expense tracker built with Flutter + Supabase + OpenAI Whisper.
 - Manual add/edit expense flow with category/subcategory picker
 - Expense list grouped by date, tap to edit, long-press to delete
 - Analytics dashboard (pie, bars, trend line, summary cards)
+- Moneii AI with month-wise chat history (current + previous 2 months)
 - Profile management (avatar, optional details, currency preference)
 - Theme mode toggle (dark default), notification preference toggle
 - Premium feature placeholders include "Coming soon" where not implemented yet
@@ -110,6 +111,7 @@ flutter run
 - Setup name + optional avatar works
 - Add manual expense -> appears in Home and Analytics
 - Voice add works (with valid OpenAI key)
+- Moneii AI answers are concise and stay within 200 words
 - Tap transaction opens edit, long-press opens delete confirm
 - Profile save works, theme toggle works, sign out redirects to login
 

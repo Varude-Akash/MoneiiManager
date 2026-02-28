@@ -18,6 +18,31 @@ final expensesProvider = FutureProvider<List<Expense>>((ref) async {
   return (data as List).map((e) => Expense.fromJson(e)).toList();
 });
 
+final voiceEntryTodayCountProvider = FutureProvider<int>((ref) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return 0;
+  final client = ref.watch(supabaseClientProvider);
+
+  final nowLocal = DateTime.now();
+  final dayStartLocal = DateTime(
+    nowLocal.year,
+    nowLocal.month,
+    nowLocal.day,
+  );
+  final dayEndLocal = dayStartLocal.add(const Duration(days: 1));
+
+  // Keep Home counter aligned with backend voice AI daily usage limits.
+  // This count is independent of transaction deletion.
+  final response = await client
+      .from('ai_voice_requests')
+      .select('id')
+      .eq('user_id', user.id)
+      .gte('created_at', dayStartLocal.toUtc().toIso8601String())
+      .lt('created_at', dayEndLocal.toUtc().toIso8601String());
+
+  return (response as List).length;
+});
+
 Future<void> _recalculateAccountBalances(Ref ref) async {
   final user = ref.read(authStateProvider).valueOrNull;
   if (user == null) return;
@@ -142,7 +167,18 @@ class AddExpenseNotifier extends StateNotifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       final client = _ref.read(supabaseClientProvider);
-      await client.from('expenses').insert(expense.toInsertJson());
+      final inserted = await client
+          .from('expenses')
+          .insert(expense.toInsertJson())
+          .select('id')
+          .single();
+      if (expense.inputMethod == 'voice') {
+        await client.from('voice_entry_ledger').insert({
+          'user_id': expense.userId,
+          'expense_id': inserted['id'],
+        });
+        _ref.invalidate(voiceEntryTodayCountProvider);
+      }
       await _recalculateAccountBalances(_ref);
       _ref.invalidate(expensesProvider);
       state = const AsyncValue.data(null);
