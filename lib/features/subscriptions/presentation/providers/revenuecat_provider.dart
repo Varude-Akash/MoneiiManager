@@ -273,10 +273,21 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
   }
 
   String _formatError(Object error) {
+    final raw = error.toString();
+    final normalized = raw.toLowerCase();
+
+    // Hide verbose SDK payloads in UI; keep the message actionable.
+    if (normalized.contains('configuration_error') ||
+        normalized.contains('no products registered') ||
+        normalized.contains('why-are-offerings-empty') ||
+        normalized.contains('there is an issue with your configuration')) {
+      return 'Subscriptions are temporarily unavailable. Please try again shortly.';
+    }
+
     if (error is PurchasesError) {
       return error.message;
     }
-    return error.toString().replaceFirst('Exception: ', '');
+    return raw.replaceFirst('Exception: ', '');
   }
 
   Offering? _selectOfferingForEntitlement({

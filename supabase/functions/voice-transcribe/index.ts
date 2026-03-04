@@ -70,13 +70,24 @@ Deno.serve(async (req) => {
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
 
-  const dailyCountResult = await supabase
+  // Confirmed usage should be counted from the ledger that is written only
+  // after a transaction is successfully saved from voice input.
+  const confirmedDailyCountResult = await supabase
+    .from('voice_entry_ledger')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('created_at', dayStart.toISOString());
+
+  const confirmedDailyUsed = confirmedDailyCountResult.count ?? 0;
+
+  // Keep a separate hard safety guard for raw transcription requests.
+  const attemptDailyCountResult = await supabase
     .from('ai_voice_requests')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .gte('created_at', dayStart.toISOString());
 
-  const dailyUsed = dailyCountResult.count ?? 0;
+  const attemptDailyUsed = attemptDailyCountResult.count ?? 0;
   let freeTrialUsed = 0;
   let freeTrialEnd: Date | null = null;
 
@@ -95,7 +106,7 @@ Deno.serve(async (req) => {
     }
 
     const freeTrialCountResult = await supabase
-      .from('ai_voice_requests')
+      .from('voice_entry_ledger')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .gte('created_at', signupAt.toISOString())
@@ -112,7 +123,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  if (dailyUsed >= VOICE_DAILY_HARD_SAFETY_LIMIT) {
+  if (attemptDailyUsed >= VOICE_DAILY_HARD_SAFETY_LIMIT) {
     return json(
       {
         error:
@@ -122,7 +133,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  if (dailyLimit != null && dailyUsed >= dailyLimit) {
+  if (dailyLimit != null && confirmedDailyUsed >= dailyLimit) {
     return json(
       {
         error: 'Daily voice AI limit reached for your plan.',
@@ -177,9 +188,9 @@ Deno.serve(async (req) => {
       transcript,
       description,
       usage: {
-        daily_used: dailyUsed + 1,
+        daily_used: confirmedDailyUsed,
         daily_limit: dailyLimit,
-        monthly_used: planTier === 'free' ? freeTrialUsed + 1 : 0,
+        monthly_used: planTier === 'free' ? freeTrialUsed : 0,
         monthly_limit: planTier === 'free' ? FREE_TRIAL_TOTAL_LIMIT : null,
         trial_days: planTier === 'free' ? FREE_TRIAL_DAYS : null,
         trial_ends_at: freeTrialEnd?.toISOString() ?? null,

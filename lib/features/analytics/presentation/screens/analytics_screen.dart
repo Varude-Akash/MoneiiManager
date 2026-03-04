@@ -730,14 +730,23 @@ class _IncomeSection extends ConsumerWidget {
   }
 }
 
-class _ExpensePieWithLegend extends ConsumerWidget {
+class _ExpensePieWithLegend extends ConsumerStatefulWidget {
   const _ExpensePieWithLegend({required this.summary});
 
   final AnalyticsSummary summary;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ExpensePieWithLegend> createState() =>
+      _ExpensePieWithLegendState();
+}
+
+class _ExpensePieWithLegendState extends ConsumerState<_ExpensePieWithLegend> {
+  int _touchedIndex = -1;
+
+  @override
+  Widget build(BuildContext context) {
     final categories = ref.watch(categoryByIdProvider);
+    final summary = widget.summary;
     final total = summary.categoryBreakdown.fold<double>(
       0,
       (sum, item) => sum + item.total,
@@ -768,19 +777,49 @@ class _ExpensePieWithLegend extends ConsumerWidget {
                       PieChartData(
                         sectionsSpace: 2,
                         centerSpaceRadius: centerRadius,
-                        sections: summary.categoryBreakdown.map((item) {
+                        pieTouchData: PieTouchData(
+                          touchCallback: (event, response) {
+                            if (!event.isInterestedForInteractions ||
+                                response?.touchedSection == null) {
+                              if (_touchedIndex != -1) {
+                                setState(() => _touchedIndex = -1);
+                              }
+                              return;
+                            }
+                            final index =
+                                response!.touchedSection!.touchedSectionIndex;
+                            if (index != _touchedIndex) {
+                              setState(() => _touchedIndex = index);
+                            }
+                          },
+                        ),
+                        sections: summary.categoryBreakdown.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final item = entry.value;
                           final value = total == 0 ? 0.0 : item.total / total * 100;
                           final category = categories[item.categoryId];
+                          final selected = index == _touchedIndex;
                           return PieChartSectionData(
                             value: max(value, 0.5),
                             title: '${value.toStringAsFixed(0)}%',
-                            radius: sectionRadius,
+                            radius: selected ? sectionRadius + 6 : sectionRadius,
                             titleStyle: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
                               fontSize: compact ? 9 : 10,
                             ),
                             color: category?.displayColor ?? AppColors.categoryOther,
+                            badgeWidget: selected
+                                ? _PieAmountBadge(
+                                    label: item.categoryName,
+                                    amount: CurrencyUtils.format(
+                                      item.total,
+                                      currency: summary.preferredCurrency,
+                                    ),
+                                    compact: compact,
+                                  )
+                                : null,
+                            badgePositionPercentageOffset: 1.22,
                           );
                         }).toList(),
                       ),
@@ -838,6 +877,66 @@ class _ExpensePieWithLegend extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _PieAmountBadge extends StatelessWidget {
+  const _PieAmountBadge({
+    required this.label,
+    required this.amount,
+    required this.compact,
+  });
+
+  final String label;
+  final String amount;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(maxWidth: compact ? 120 : 150),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 6 : 7,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: compact ? 10 : 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            amount,
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: compact ? 12 : 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

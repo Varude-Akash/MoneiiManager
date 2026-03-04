@@ -903,6 +903,19 @@ class _ExpenseGroup extends ConsumerWidget {
   final String preferredCurrency;
   final Map<String, double> usdRates;
 
+  Color _amountColorForType(String transactionType) {
+    switch (transactionType) {
+      case 'income':
+        return AppColors.success;
+      case 'expense':
+        return AppColors.error;
+      case 'transfer':
+      case 'credit_card_payment':
+      default:
+        return AppColors.textPrimary;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
@@ -1083,8 +1096,8 @@ class _ExpenseGroup extends ConsumerWidget {
                     const SizedBox(width: 8),
                     Text(
                       amount,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: _amountColorForType(expense.transactionType),
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),

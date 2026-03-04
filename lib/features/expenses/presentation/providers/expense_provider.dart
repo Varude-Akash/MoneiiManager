@@ -31,10 +31,10 @@ final voiceEntryTodayCountProvider = FutureProvider<int>((ref) async {
   );
   final dayEndLocal = dayStartLocal.add(const Duration(days: 1));
 
-  // Keep Home counter aligned with backend voice AI daily usage limits.
-  // This count is independent of transaction deletion.
+  // Count only confirmed voice entries. Deleting transactions does not
+  // decrement this ledger, by design.
   final response = await client
-      .from('ai_voice_requests')
+      .from('voice_entry_ledger')
       .select('id')
       .eq('user_id', user.id)
       .gte('created_at', dayStartLocal.toUtc().toIso8601String())
