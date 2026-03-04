@@ -401,6 +401,46 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
   }
 
+  Future<void> _deleteCurrentExpense() async {
+    final existing = widget.initialExpense;
+    if (existing == null) return;
+
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete transaction?'),
+        content: const Text(
+          'This transaction will be permanently deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true || !mounted) return;
+
+    try {
+      await ref.read(deleteExpenseProvider.notifier).deleteExpense(existing.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Transaction deleted')),
+      );
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      _showError(e.toString());
+    }
+  }
+
   void _autoselectAccount(List<FinancialAccount> accounts) {
     if (_selectedAccountId != null) return;
 
@@ -593,6 +633,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       appBar: AppBar(
         title: Text(_screenTitle()),
         actions: [
+          if (_isEditing)
+            IconButton(
+              onPressed: _deleteCurrentExpense,
+              icon: const Icon(Icons.delete_rounded, color: AppColors.error),
+              tooltip: 'Delete transaction',
+            ),
           IconButton(
             onPressed: _openVoiceInput,
             icon: const Icon(Icons.mic_rounded),

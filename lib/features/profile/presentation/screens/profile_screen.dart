@@ -1030,7 +1030,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final balanceController = TextEditingController(
       text: account.accountType == 'credit_card'
           ? account.creditLimit.toStringAsFixed(2)
-          : account.initialBalance.toStringAsFixed(2),
+          : account.currentBalance.toStringAsFixed(2),
     );
     final utilizedController = TextEditingController(
       text: account.utilizedAmount.toStringAsFixed(2),

@@ -11,7 +11,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
 const FREE_DAILY_LIMIT = 3;
-const FREE_MONTHLY_LIMIT = 93;
+const FREE_TRIAL_DAYS = 30;
+const FREE_TRIAL_TOTAL_LIMIT = 90;
 const PREMIUM_DAILY_LIMIT = 10;
 // Premium+ is product-unlimited for voice, but keep a hard backend safety cap.
 const VOICE_DAILY_HARD_SAFETY_LIMIT = 200;
@@ -63,14 +64,10 @@ Deno.serve(async (req) => {
       : planTier === 'premium'
       ? PREMIUM_DAILY_LIMIT
       : null;
-  const monthlyLimit = planTier === 'free' ? FREE_MONTHLY_LIMIT : null;
 
   const now = new Date();
   const dayStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  const monthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   );
 
   const dailyCountResult = await supabase
@@ -79,14 +76,41 @@ Deno.serve(async (req) => {
     .eq('user_id', user.id)
     .gte('created_at', dayStart.toISOString());
 
-  const monthlyCountResult = await supabase
-    .from('ai_voice_requests')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .gte('created_at', monthStart.toISOString());
-
   const dailyUsed = dailyCountResult.count ?? 0;
-  const monthlyUsed = monthlyCountResult.count ?? 0;
+  let freeTrialUsed = 0;
+  let freeTrialEnd: Date | null = null;
+
+  if (planTier === 'free') {
+    const signupAt = user.created_at ? new Date(user.created_at) : now;
+    freeTrialEnd = new Date(signupAt);
+    freeTrialEnd.setUTCDate(freeTrialEnd.getUTCDate() + FREE_TRIAL_DAYS);
+
+    if (now > freeTrialEnd) {
+      return json(
+        {
+          error: 'Free voice trial ended. Upgrade to continue voice entries.',
+        },
+        429,
+      );
+    }
+
+    const freeTrialCountResult = await supabase
+      .from('ai_voice_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', signupAt.toISOString())
+      .lt('created_at', freeTrialEnd.toISOString());
+    freeTrialUsed = freeTrialCountResult.count ?? 0;
+
+    if (freeTrialUsed >= FREE_TRIAL_TOTAL_LIMIT) {
+      return json(
+        {
+          error: 'Free voice trial limit reached. Upgrade to continue voice entries.',
+        },
+        429,
+      );
+    }
+  }
 
   if (dailyUsed >= VOICE_DAILY_HARD_SAFETY_LIMIT) {
     return json(
@@ -102,15 +126,6 @@ Deno.serve(async (req) => {
     return json(
       {
         error: 'Daily voice AI limit reached for your plan.',
-      },
-      429,
-    );
-  }
-
-  if (monthlyLimit != null && monthlyUsed >= monthlyLimit) {
-    return json(
-      {
-        error: 'Monthly voice AI limit reached for your plan.',
       },
       429,
     );
@@ -164,8 +179,10 @@ Deno.serve(async (req) => {
       usage: {
         daily_used: dailyUsed + 1,
         daily_limit: dailyLimit,
-        monthly_used: monthlyUsed + 1,
-        monthly_limit: monthlyLimit,
+        monthly_used: planTier === 'free' ? freeTrialUsed + 1 : 0,
+        monthly_limit: planTier === 'free' ? FREE_TRIAL_TOTAL_LIMIT : null,
+        trial_days: planTier === 'free' ? FREE_TRIAL_DAYS : null,
+        trial_ends_at: freeTrialEnd?.toISOString() ?? null,
       },
     });
   } catch (error) {

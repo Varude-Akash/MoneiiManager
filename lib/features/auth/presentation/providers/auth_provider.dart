@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:moneii_manager/features/auth/domain/entities/app_user.dart';
 import 'package:moneii_manager/features/profile/domain/entities/user_profile.dart';
@@ -6,6 +7,23 @@ import 'package:moneii_manager/features/profile/domain/entities/user_profile.dar
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
 });
+
+const _oauthRedirectUrl = 'io.supabase.flutter://login-callback/';
+
+String? _oauthRedirectForPlatform() {
+  if (kIsWeb) return null;
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+    case TargetPlatform.iOS:
+      return _oauthRedirectUrl;
+    case TargetPlatform.macOS:
+    case TargetPlatform.windows:
+    case TargetPlatform.linux:
+      return null;
+    case TargetPlatform.fuchsia:
+      return null;
+  }
+}
 
 final authStateProvider = StreamProvider<AppUser?>((ref) {
   final client = ref.watch(supabaseClientProvider);
@@ -71,6 +89,36 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<void> signInWithGoogle() async {
+    state = const AsyncValue.loading();
+    try {
+      await _client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: _oauthRedirectForPlatform(),
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+      state = const AsyncValue.data(null);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
+  }
+
+  Future<void> signInWithApple() async {
+    state = const AsyncValue.loading();
+    try {
+      await _client.auth.signInWithOAuth(
+        OAuthProvider.apple,
+        redirectTo: _oauthRedirectForPlatform(),
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+      state = const AsyncValue.data(null);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
     }
   }
 

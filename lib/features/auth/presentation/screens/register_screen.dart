@@ -238,22 +238,44 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 }
 
-class _SocialButtons extends StatelessWidget {
+class _SocialButtons extends ConsumerWidget {
   const _SocialButtons();
 
   @override
-  Widget build(BuildContext context) {
-    void showComingSoon() {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google/Apple login coming soon')),
-      );
+  Widget build(BuildContext context, WidgetRef ref) {
+    Future<void> signInWithGoogle() async {
+      try {
+        await ref.read(authNotifierProvider.notifier).signInWithGoogle();
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google sign in could not be completed. Please try again.$e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+
+    Future<void> signInWithApple() async {
+      try {
+        await ref.read(authNotifierProvider.notifier).signInWithApple();
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Apple sign in could not be completed. Please try again.$e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
 
     return Row(
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: showComingSoon,
+            onPressed: signInWithGoogle,
             icon: const Icon(Icons.g_mobiledata_rounded),
             label: const Text('Google'),
           ),
@@ -261,7 +283,7 @@ class _SocialButtons extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: showComingSoon,
+            onPressed: signInWithApple,
             icon: const Icon(Icons.apple_rounded),
             label: const Text('Apple'),
           ),

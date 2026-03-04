@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:moneii_manager/core/constants.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
 import 'package:moneii_manager/features/profile/domain/entities/financial_account.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 final financialAccountsProvider = FutureProvider<List<FinancialAccount>>((
   ref,
@@ -167,10 +169,33 @@ class FinancialAccountActions extends StateNotifier<AsyncValue<void>> {
         payload['utilized_amount'] = nextUtilized;
         payload['current_balance'] = nextLimit - nextUtilized;
       } else {
-        final nextInitial = initialBalance ?? account.initialBalance;
-        final netDelta = account.currentBalance - account.initialBalance;
-        payload['initial_balance'] = nextInitial;
-        payload['current_balance'] = nextInitial + netDelta;
+        final targetBalance = initialBalance ?? account.currentBalance;
+        final correctionDelta = targetBalance - account.currentBalance;
+
+        // Do not rewrite old transaction effects. Record manual balance edits as
+        // a new correction transaction so history remains auditable.
+        if (correctionDelta.abs() >= 0.01) {
+          final correctionCategoryId = await _resolveBalanceCorrectionCategoryId(
+            client,
+          );
+          final profile = _ref.read(profileProvider).valueOrNull;
+          final currency = profile?.currencyPreference ?? AppConstants.defaultCurrency;
+          final transactionType = correctionDelta > 0 ? 'income' : 'expense';
+          final paymentSource = _paymentSourceForAccountType(account.accountType);
+
+          await client.from('expenses').insert({
+            'user_id': user.id,
+            'amount': correctionDelta.abs(),
+            'currency': currency,
+            'category_id': correctionCategoryId,
+            'description': 'Balance correction',
+            'expense_date': DateTime.now().toIso8601String().split('T')[0],
+            'transaction_type': transactionType,
+            'payment_source': paymentSource,
+            'account_id': account.id,
+            'input_method': 'manual',
+          });
+        }
       }
 
       await client
@@ -185,6 +210,43 @@ class FinancialAccountActions extends StateNotifier<AsyncValue<void>> {
       state = AsyncValue.error(e, st);
       rethrow;
     }
+  }
+
+  Future<int> _resolveBalanceCorrectionCategoryId(SupabaseClient client) async {
+    final rows = await client.from('categories').select('id,name,parent_id');
+    final data = (rows as List).whereType<Map<String, dynamic>>().toList();
+    if (data.isEmpty) {
+      throw Exception('No categories found. Seed categories before editing balance.');
+    }
+
+    Map<String, dynamic>? otherRoot;
+    Map<String, dynamic>? firstRoot;
+    for (final row in data) {
+      final parentId = row['parent_id'];
+      if (parentId == null && firstRoot == null) {
+        firstRoot = row;
+      }
+      final name = (row['name'] as String?)?.trim().toLowerCase();
+      if (parentId == null && name == 'other') {
+        otherRoot = row;
+        break;
+      }
+    }
+
+    final selected = otherRoot ?? firstRoot ?? data.first;
+    final id = selected['id'];
+    if (id is int) return id;
+    if (id is num) return id.toInt();
+    throw Exception('Invalid category id for balance correction.');
+  }
+
+  String _paymentSourceForAccountType(String accountType) {
+    return switch (accountType) {
+      'bank_account' => 'bank_account',
+      'wallet' => 'wallet',
+      'credit_card' => 'credit_card',
+      _ => 'cash',
+    };
   }
 }
 
