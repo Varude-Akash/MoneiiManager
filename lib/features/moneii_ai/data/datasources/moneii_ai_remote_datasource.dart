@@ -51,7 +51,8 @@ class MoneiiAiBootstrapData {
 }
 
 class MoneiiAiRemoteDatasource {
-  MoneiiAiRemoteDatasource({dio.Dio? dioClient}) : _dio = dioClient ?? dio.Dio();
+  MoneiiAiRemoteDatasource({dio.Dio? dioClient})
+    : _dio = dioClient ?? dio.Dio();
 
   final dio.Dio _dio;
 
@@ -74,11 +75,7 @@ class MoneiiAiRemoteDatasource {
     );
 
     final nowLocal = DateTime.now();
-    final dayStartLocal = DateTime(
-      nowLocal.year,
-      nowLocal.month,
-      nowLocal.day,
-    );
+    final dayStartLocal = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
     final monthStartLocal = DateTime(nowLocal.year, nowLocal.month);
     final oldestMonthLocal = DateTime(nowLocal.year, nowLocal.month - 2);
 
@@ -195,7 +192,8 @@ class MoneiiAiRemoteDatasource {
     if (forceRefresh) {
       try {
         final refreshed = await client.auth.refreshSession();
-        return refreshed.session?.accessToken ?? client.auth.currentSession?.accessToken;
+        return refreshed.session?.accessToken ??
+            client.auth.currentSession?.accessToken;
       } catch (_) {
         return client.auth.currentSession?.accessToken;
       }
@@ -209,7 +207,10 @@ class MoneiiAiRemoteDatasource {
   ) {
     return _dio.post<Map<String, dynamic>>(
       '${Env.supabaseUrl}/functions/v1/moneii-ai',
-      data: {'prompt': prompt},
+      data: {
+        'prompt': prompt,
+        'tz_offset_minutes': DateTime.now().timeZoneOffset.inMinutes,
+      },
       options: dio.Options(
         headers: {
           'Authorization': 'Bearer $token',

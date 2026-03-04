@@ -78,8 +78,8 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date();
-  const dayStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  const { dayStartIso, dayEndIso } = resolveDayRangeUtc(
+    body?.tz_offset_minutes,
   );
   const retentionStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1),
@@ -96,7 +96,8 @@ Deno.serve(async (req) => {
     .from('ai_assistant_requests')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .gte('created_at', dayStart.toISOString());
+    .gte('created_at', dayStartIso)
+    .lt('created_at', dayEndIso);
 
   const dailyUsed = dailyCountResult.count ?? 0;
   const dailyLimit =
@@ -347,14 +348,51 @@ function resolvePlanTier(
   return isPremiumRaw === true ? 'premium' : 'free';
 }
 
-async function parseBody(req: Request): Promise<{ prompt?: string } | null> {
+async function parseBody(req: Request): Promise<{
+  prompt?: string;
+  tz_offset_minutes?: number | string;
+} | null> {
   try {
     const body = await req.json();
     if (!body || typeof body !== 'object') return null;
-    return body as { prompt?: string };
+    return body as {
+      prompt?: string;
+      tz_offset_minutes?: number | string;
+    };
   } catch (_) {
     return null;
   }
+}
+
+function resolveDayRangeUtc(tzOffsetRaw: unknown): {
+  dayStartIso: string;
+  dayEndIso: string;
+} {
+  const parsed =
+    typeof tzOffsetRaw === 'number'
+      ? Math.trunc(tzOffsetRaw)
+      : typeof tzOffsetRaw === 'string'
+      ? Number.parseInt(tzOffsetRaw, 10)
+      : 0;
+  const offsetMinutes = Number.isFinite(parsed)
+    ? Math.max(-840, Math.min(840, parsed))
+    : 0;
+
+  const now = new Date();
+  const localNowMs = now.getTime() + offsetMinutes * 60_000;
+  const localNow = new Date(localNowMs);
+  const localDayStartMs = Date.UTC(
+    localNow.getUTCFullYear(),
+    localNow.getUTCMonth(),
+    localNow.getUTCDate(),
+  );
+  const dayStartUtcMs = localDayStartMs - offsetMinutes * 60_000;
+  const dayEndUtcMs = dayStartUtcMs + 24 * 60 * 60 * 1000;
+
+  return {
+    dayStartIso: new Date(dayStartUtcMs).toISOString(),
+    dayEndIso: new Date(dayEndUtcMs).toISOString(),
+  };
 }
 
 function json(data: unknown, status = 200) {

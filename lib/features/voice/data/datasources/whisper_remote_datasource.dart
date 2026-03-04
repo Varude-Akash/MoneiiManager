@@ -4,10 +4,7 @@ import 'package:moneii_manager/config/env.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class VoiceTranscriptionResult {
-  const VoiceTranscriptionResult({
-    required this.transcript,
-    this.description,
-  });
+  const VoiceTranscriptionResult({required this.transcript, this.description});
 
   final String transcript;
   final String? description;
@@ -34,12 +31,16 @@ class WhisperRemoteDatasource {
       if (statusCode == 401 || statusCode == 403) {
         final refreshedToken = await _getAccessToken(forceRefresh: true);
         if (refreshedToken == null || refreshedToken.isEmpty) {
-          throw Exception('Your session expired. Please sign out and sign in again.');
+          throw Exception(
+            'Your session expired. Please sign out and sign in again.',
+          );
         }
         try {
           response = await _callTranscribe(refreshedToken, multipartFile);
         } on dio.DioException {
-          throw Exception('Your session expired. Please sign out and sign in again.');
+          throw Exception(
+            'Your session expired. Please sign out and sign in again.',
+          );
         }
         return _parseResponse(response.data ?? <String, dynamic>{});
       }
@@ -99,6 +100,7 @@ class WhisperRemoteDatasource {
       '${Env.supabaseUrl}/functions/v1/voice-transcribe',
       data: dio.FormData.fromMap({
         'file': multipartFile,
+        'tz_offset_minutes': DateTime.now().timeZoneOffset.inMinutes.toString(),
       }),
       options: dio.Options(
         headers: {

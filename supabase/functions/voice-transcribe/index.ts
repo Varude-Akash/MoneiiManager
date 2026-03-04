@@ -49,6 +49,15 @@ Deno.serve(async (req) => {
     return json({ error: 'Unauthorized user.' }, 401);
   }
 
+  const formData = await req.formData();
+  const file = formData.get('file');
+  if (!(file instanceof File)) {
+    return json({ error: 'Audio file is required.' }, 400);
+  }
+  const { dayStartIso, dayEndIso } = resolveDayRangeUtc(
+    formData.get('tz_offset_minutes'),
+  );
+
   const profileResult = await supabase
     .from('profiles')
     .select('plan_tier, is_premium')
@@ -66,9 +75,6 @@ Deno.serve(async (req) => {
       : null;
 
   const now = new Date();
-  const dayStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
 
   // Confirmed usage should be counted from the ledger that is written only
   // after a transaction is successfully saved from voice input.
@@ -76,7 +82,8 @@ Deno.serve(async (req) => {
     .from('voice_entry_ledger')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .gte('created_at', dayStart.toISOString());
+    .gte('created_at', dayStartIso)
+    .lt('created_at', dayEndIso);
 
   const confirmedDailyUsed = confirmedDailyCountResult.count ?? 0;
 
@@ -85,7 +92,8 @@ Deno.serve(async (req) => {
     .from('ai_voice_requests')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .gte('created_at', dayStart.toISOString());
+    .gte('created_at', dayStartIso)
+    .lt('created_at', dayEndIso);
 
   const attemptDailyUsed = attemptDailyCountResult.count ?? 0;
   let freeTrialUsed = 0;
@@ -140,12 +148,6 @@ Deno.serve(async (req) => {
       },
       429,
     );
-  }
-
-  const formData = await req.formData();
-  const file = formData.get('file');
-  if (!(file instanceof File)) {
-    return json({ error: 'Audio file is required.' }, 400);
   }
 
   if (file.size <= 0) {
@@ -247,6 +249,33 @@ function resolvePlanTier(
   if (planTierRaw === 'premium') return 'premium';
   if (planTierRaw === 'free') return 'free';
   return isPremiumRaw === true ? 'premium' : 'free';
+}
+
+function resolveDayRangeUtc(tzOffsetRaw: FormDataEntryValue | null): {
+  dayStartIso: string;
+  dayEndIso: string;
+} {
+  const parsed =
+    typeof tzOffsetRaw === 'string' ? Number.parseInt(tzOffsetRaw, 10) : 0;
+  const offsetMinutes = Number.isFinite(parsed)
+    ? Math.max(-840, Math.min(840, parsed))
+    : 0;
+
+  const now = new Date();
+  const localNowMs = now.getTime() + offsetMinutes * 60_000;
+  const localNow = new Date(localNowMs);
+  const localDayStartMs = Date.UTC(
+    localNow.getUTCFullYear(),
+    localNow.getUTCMonth(),
+    localNow.getUTCDate(),
+  );
+  const dayStartUtcMs = localDayStartMs - offsetMinutes * 60_000;
+  const dayEndUtcMs = dayStartUtcMs + 24 * 60 * 60 * 1000;
+
+  return {
+    dayStartIso: new Date(dayStartUtcMs).toISOString(),
+    dayEndIso: new Date(dayEndUtcMs).toISOString(),
+  };
 }
 
 function isKnownHallucination(text: string): boolean {
