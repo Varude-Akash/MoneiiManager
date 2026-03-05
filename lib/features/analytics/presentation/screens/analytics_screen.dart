@@ -4,13 +4,21 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:iconsax/iconsax.dart';
+import 'package:intl/intl.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/core/utils/currency_utils.dart';
 import 'package:moneii_manager/core/utils/date_utils.dart';
 import 'package:moneii_manager/features/analytics/presentation/providers/analytics_provider.dart';
+import 'package:moneii_manager/features/budgets/presentation/providers/budget_provider.dart';
+import 'package:moneii_manager/features/budgets/presentation/widgets/set_budget_sheet.dart';
+import 'package:moneii_manager/features/expenses/domain/entities/category.dart';
 import 'package:moneii_manager/features/expenses/domain/entities/expense.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/category_provider.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/expense_provider.dart';
+import 'package:moneii_manager/features/health_score/presentation/widgets/health_score_card.dart';
+import 'package:moneii_manager/features/wrapped/presentation/providers/wrapped_provider.dart';
 import 'package:moneii_manager/shared/widgets/glass_card.dart';
 import 'package:moneii_manager/shared/widgets/shimmer_skeleton.dart';
 
@@ -58,6 +66,10 @@ class AnalyticsScreen extends ConsumerWidget {
             },
           ),
           const SizedBox(height: 10),
+          const HealthScoreCard(),
+          const SizedBox(height: 8),
+          _BudgetsSection(selectedMonth: summary.selectedMonth),
+          const SizedBox(height: 10),
           _SelectedMonthSpendCard(summary: summary),
           const SizedBox(height: 12),
           if (viewMode == AnalyticsViewMode.combined) ...[
@@ -71,6 +83,8 @@ class AnalyticsScreen extends ConsumerWidget {
           ] else ...[
             _IncomeSection(summary: summary),
           ],
+          const SizedBox(height: 12),
+          _WrappedBanner(),
         ],
       ).animate().fadeIn(duration: 220.ms),
     );
@@ -1333,6 +1347,360 @@ class _SectionTitle extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Budgets Section ─────────────────────────────────────────────────────────
+
+class _BudgetsSection extends ConsumerWidget {
+  const _BudgetsSection({required this.selectedMonth});
+  final DateTime selectedMonth;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final budgetProgressList = ref.watch(budgetProgressProvider);
+    final categories = ref.watch(categoryTreeProvider);
+    final now = DateTime.now();
+    final isCurrentMonth =
+        selectedMonth.year == now.year && selectedMonth.month == now.month;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Iconsax.chart_square, color: AppColors.primary, size: 15),
+            const SizedBox(width: 6),
+            const Text(
+              'Budgets',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            const Spacer(),
+            if (isCurrentMonth)
+              GestureDetector(
+                onTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  builder: (ctx) => _CategoryPickerSheet(categories: categories),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 11, color: AppColors.primary),
+                      SizedBox(width: 3),
+                      Text(
+                        'Add',
+                        style: TextStyle(color: AppColors.primary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (!isCurrentMonth)
+          Text(
+            'Budgets apply to the current month only.',
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+          )
+        else
+          SizedBox(
+            height: 78,
+            child: budgetProgressList.isEmpty
+                ? ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      ...categories.take(5).map(
+                            (g) => GestureDetector(
+                              onTap: () => SetBudgetSheet.show(
+                                context,
+                                categoryId: g.parent.id,
+                                categoryName: g.parent.name,
+                              ),
+                              child: Container(
+                                width: 96,
+                                margin: const EdgeInsets.only(right: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceLight.withValues(alpha: 0.35),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.glassBorder,
+                                    style: BorderStyle.solid,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.add,
+                                      color: AppColors.textMuted,
+                                      size: 15,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      g.parent.name,
+                                      style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 10.5,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                    ],
+                  )
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: budgetProgressList.length + 1,
+                    itemBuilder: (context, index) {
+                      // Last item = "+" add chip
+                      if (index == budgetProgressList.length) {
+                        return GestureDetector(
+                          onTap: () => showModalBottomSheet<void>(
+                            context: context,
+                            builder: (ctx) =>
+                                _CategoryPickerSheet(categories: categories),
+                          ),
+                          child: Container(
+                            width: 52,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceLight.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.glassBorder),
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add, color: AppColors.textMuted, size: 18),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Add',
+                                  style: TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 9,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      final bp = budgetProgressList[index];
+                      final ratio = bp.budget.amount > 0
+                          ? bp.spentAmount / bp.budget.amount
+                          : 0.0;
+                      final clamped = ratio.clamp(0.0, 1.0);
+                      final color = ratio >= 1.0
+                          ? AppColors.error
+                          : ratio >= 0.8
+                              ? AppColors.warning
+                              : AppColors.primary;
+                      return GestureDetector(
+                        onTap: () => SetBudgetSheet.show(
+                          context,
+                          categoryId: bp.budget.categoryId,
+                          categoryName: bp.budget.categoryName,
+                          existingBudget: bp.budget,
+                        ),
+                        child: Container(
+                          width: 108,
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceLight.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: ratio >= 0.8
+                                  ? color.withValues(alpha: 0.4)
+                                  : AppColors.glassBorder,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                bp.budget.categoryName,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${CurrencyUtils.formatCompact(bp.spentAmount)} / ${CurrencyUtils.formatCompact(bp.budget.amount)}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const Spacer(),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(100),
+                                child: LinearProgressIndicator(
+                                  value: clamped,
+                                  minHeight: 4,
+                                  backgroundColor:
+                                      AppColors.glassBorder.withValues(alpha: 0.6),
+                                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${(ratio * 100).toStringAsFixed(0)}% used',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CategoryPickerSheet extends StatelessWidget {
+  const _CategoryPickerSheet({required this.categories});
+  final List<CategoryGroup> categories;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Set budget for category',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: categories
+                  .map(
+                    (g) => ListTile(
+                      title: Text(
+                        g.parent.name,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        SetBudgetSheet.show(
+                          context,
+                          categoryId: g.parent.id,
+                          categoryName: g.parent.name,
+                        );
+                      },
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Wrapped Banner ───────────────────────────────────────────────────────────
+
+class _WrappedBanner extends ConsumerWidget {
+  const _WrappedBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final wrappedAsync = ref.watch(wrappedDataProvider);
+    return wrappedAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (data) {
+        if (data == null) return const SizedBox.shrink();
+        final prevMonth = DateTime(DateTime.now().year, DateTime.now().month - 1);
+        final monthLabel = DateFormat('MMMM').format(prevMonth);
+        return GestureDetector(
+          onTap: () => context.push('/wrapped', extra: data),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.6),
+                  AppColors.accent.withValues(alpha: 0.4),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                Text(data.emoji, style: const TextStyle(fontSize: 32)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$monthLabel Wrapped',
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        data.title,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

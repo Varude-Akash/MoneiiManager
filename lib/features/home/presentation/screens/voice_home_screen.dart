@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/core/utils/date_utils.dart';
+import 'package:moneii_manager/features/budgets/presentation/widgets/budget_alert_banner.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/expense_provider.dart';
 import 'package:moneii_manager/features/expenses/presentation/screens/add_expense_screen.dart';
 import 'package:moneii_manager/features/voice/presentation/providers/voice_input_provider.dart';
@@ -336,6 +337,8 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        const BudgetAlertBanner(),
                         const SizedBox(height: 12),
                         GestureDetector(
                           onTap: () => context.push('/moneii-ai'),

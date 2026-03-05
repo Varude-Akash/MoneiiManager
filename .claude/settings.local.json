@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(flutter --version:*)",
-      "Bash(flutter create:*)"
+      "Bash(flutter create:*)",
+      "Bash(flutter analyze --no-fatal-infos)"
     ]
   }
 }

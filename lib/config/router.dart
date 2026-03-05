@@ -15,6 +15,10 @@ import 'package:moneii_manager/features/legal/presentation/screens/legal_documen
 import 'package:moneii_manager/features/profile/presentation/screens/profile_screen.dart';
 import 'package:moneii_manager/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:moneii_manager/features/onboarding/presentation/providers/onboarding_provider.dart';
+import 'package:moneii_manager/features/net_worth/presentation/screens/net_worth_screen.dart';
+import 'package:moneii_manager/features/goals/presentation/screens/goals_screen.dart';
+import 'package:moneii_manager/features/health_score/presentation/screens/health_score_screen.dart';
+import 'package:moneii_manager/features/wrapped/presentation/screens/wrapped_screen.dart';
 import 'package:moneii_manager/shared/widgets/app_scaffold.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -111,6 +115,33 @@ final routerProvider = Provider<GoRouter>((ref) {
               state: state,
               child: LegalDocumentScreen.termsOfService(),
             ),
+          ),
+          GoRoute(
+            path: '/net-worth',
+            pageBuilder: (context, state) =>
+                _buildPage(state: state, child: const NetWorthScreen()),
+          ),
+          GoRoute(
+            path: '/goals',
+            pageBuilder: (context, state) =>
+                _buildPage(state: state, child: const GoalsScreen()),
+          ),
+          GoRoute(
+            path: '/health-score',
+            pageBuilder: (context, state) =>
+                _buildPage(state: state, child: const HealthScoreScreen()),
+          ),
+          GoRoute(
+            path: '/wrapped',
+            pageBuilder: (context, state) {
+              final data = state.extra;
+              return _buildPage(
+                state: state,
+                child: WrappedScreen(
+                  wrappedData: data != null ? data as dynamic : null,
+                ),
+              );
+            },
           ),
         ],
       ),

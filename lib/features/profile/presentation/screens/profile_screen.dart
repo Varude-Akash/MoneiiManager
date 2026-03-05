@@ -14,6 +14,8 @@ import 'package:moneii_manager/features/onboarding/presentation/providers/onboar
 import 'package:moneii_manager/features/profile/domain/entities/financial_account.dart';
 import 'package:moneii_manager/features/profile/presentation/providers/financial_account_provider.dart';
 import 'package:moneii_manager/features/subscriptions/presentation/providers/revenuecat_provider.dart';
+import 'package:moneii_manager/features/goals/presentation/providers/goals_provider.dart';
+import 'package:moneii_manager/features/net_worth/presentation/widgets/net_worth_summary_card.dart';
 import 'package:moneii_manager/shared/widgets/glass_card.dart';
 import 'package:moneii_manager/shared/widgets/shimmer_skeleton.dart';
 
@@ -340,6 +342,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 14),
+              NetWorthSummaryCard(),
+              const SizedBox(height: 10),
+              _GoalsSummaryTile(),
               const SizedBox(height: 14),
               GlassCard(
                 margin: EdgeInsets.zero,
@@ -1289,6 +1295,103 @@ class _AccountManagerSection extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+// ─── Goals Summary Tile ───────────────────────────────────────────────────────
+
+class _GoalsSummaryTile extends ConsumerWidget {
+  const _GoalsSummaryTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final goalsAsync = ref.watch(savingsGoalsProvider);
+    final goals = goalsAsync.valueOrNull ?? [];
+    final active = goals.where((g) => !g.isCompleted).toList();
+    final completed = goals.where((g) => g.isCompleted).length;
+
+    return GestureDetector(
+      onTap: () => context.push('/goals'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.accentGreen.withValues(alpha: 0.28),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.accentGreen.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.savings_rounded,
+                color: AppColors.accentGreen,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Savings Goals',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    active.isEmpty
+                        ? 'No active goals — tap to add one'
+                        : '${active.length} active${completed > 0 ? ' · $completed completed' : ''}',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                  if (active.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(100),
+                      child: LinearProgressIndicator(
+                        value: active.fold<double>(0, (sum, g) {
+                              return sum +
+                                  (g.targetAmount > 0
+                                      ? (g.currentAmount / g.targetAmount)
+                                          .clamp(0.0, 1.0)
+                                      : 0.0);
+                            }) /
+                            active.length,
+                        minHeight: 3,
+                        backgroundColor: AppColors.glassBorder,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          AppColors.accentGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textMuted,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

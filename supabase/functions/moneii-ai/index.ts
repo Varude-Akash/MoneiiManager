@@ -174,6 +174,13 @@ async function buildUserContext(
   const fromDate = new Date(now);
   fromDate.setUTCDate(now.getUTCDate() - options.daysBack);
 
+  // Current month boundaries in UTC
+  const currentMonthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  );
+  const currentMonthStartStr = currentMonthStart.toISOString().slice(0, 10);
+  const todayStr = now.toISOString().slice(0, 10);
+
   const expensesResult = await supabase
     .from('expenses')
     .select(
@@ -209,49 +216,70 @@ async function buildUserContext(
     categories.set(row.id as number, (row.name as string) ?? 'Other');
   }
 
-  const totals90d = {
-    expense: 0,
-    income: 0,
-    transfer: 0,
-    credit_card_payment: 0,
-  };
-  const categorySpend = new Map<string, number>();
-  const recent = [];
+  type Totals = { expense: number; income: number; transfer: number; credit_card_payment: number };
+  const emptyTotals = (): Totals => ({ expense: 0, income: 0, transfer: 0, credit_card_payment: 0 });
+
+  // Separate current month from historical
+  const currentMonthTotals = emptyTotals();
+  const currentMonthCategorySpend = new Map<string, number>();
+  const currentMonthTransactions: object[] = [];
+
+  const monthlyMap = new Map<string, Totals>();
 
   for (const entry of expenses) {
     const amount = Number(entry.amount ?? 0);
-    const type = (entry.transaction_type ?? 'expense') as keyof typeof totals90d;
-    if (type in totals90d) {
-      totals90d[type] += amount;
-    }
-    if (type === 'expense') {
-      const category = categories.get(entry.category_id) ?? 'Other';
-      categorySpend.set(category, (categorySpend.get(category) ?? 0) + amount);
-    }
-    if (recent.length < 20) {
-      recent.push({
-        date: entry.expense_date,
-        type: entry.transaction_type,
-        amount,
-        currency: entry.currency,
-        category: categories.get(entry.category_id) ?? 'Other',
-        note: entry.description,
-      });
+    const type = (entry.transaction_type ?? 'expense') as keyof Totals;
+    const category = categories.get(entry.category_id) ?? 'Other';
+    const isCurrentMonth = entry.expense_date >= currentMonthStartStr;
+
+    if (isCurrentMonth) {
+      if (type in currentMonthTotals) currentMonthTotals[type] += amount;
+      if (type === 'expense') {
+        currentMonthCategorySpend.set(
+          category,
+          (currentMonthCategorySpend.get(category) ?? 0) + amount,
+        );
+      }
+      if (currentMonthTransactions.length < 30) {
+        currentMonthTransactions.push({
+          date: entry.expense_date,
+          type: entry.transaction_type,
+          amount,
+          currency: entry.currency,
+          category,
+          note: entry.description,
+        });
+      }
+    } else {
+      // Group by YYYY-MM for historical summary
+      const monthKey = entry.expense_date.slice(0, 7);
+      if (!monthlyMap.has(monthKey)) monthlyMap.set(monthKey, emptyTotals());
+      const m = monthlyMap.get(monthKey)!;
+      if (type in m) m[type] += amount;
     }
   }
 
-  const topCategories = [...categorySpend.entries()]
+  const currentMonthTopCategories = [...currentMonthCategorySpend.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([name, amount]) => ({ name, amount }));
 
+  const previousMonthsSummary = [...monthlyMap.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, 6)
+    .map(([month, totals]) => ({ month, ...totals }));
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const currentMonthLabel = `${monthNames[now.getUTCMonth()]} ${now.getUTCFullYear()}`;
+
   return {
-    generated_at: new Date().toISOString(),
-    context_days: options.daysBack,
+    today: todayStr,
+    current_month: currentMonthLabel,
     currency_preference: options.currencyPreference,
-    totals_window: totals90d,
-    top_expense_categories_window: topCategories,
-    recent_transactions: recent,
+    current_month_totals: currentMonthTotals,
+    current_month_top_expense_categories: currentMonthTopCategories,
+    current_month_transactions: currentMonthTransactions,
+    previous_months_summary: previousMonthsSummary,
     account_snapshot: accountsResult.data ?? [],
   };
 }
@@ -260,7 +288,13 @@ async function askModel(prompt: string, userContext: unknown): Promise<string> {
   const systemPrompt =
     'You are Moneii AI, a personal finance assistant. ' +
     'Use ONLY the provided user data context. ' +
-    'If data is missing, say exactly what is missing. ' +
+    'The context includes "today" (current date) and "current_month" so you always know what "this month" or "today" means. ' +
+    'current_month_totals and current_month_transactions are for the CURRENT month only. ' +
+    'previous_months_summary contains historical monthly totals. ' +
+    'When the user asks about "this month", use current_month_totals and current_month_transactions. ' +
+    'If current_month_totals shows zero expenses, say there are no expenses recorded yet this month. ' +
+    'Never confuse previous months data with current month. ' +
+    'If data is missing or zero, say so explicitly. ' +
     'Never claim external or real-time market facts. ' +
     'Answer naturally in plain text based on what the user asked. ' +
     'Do not force any fixed format or headings. ' +
