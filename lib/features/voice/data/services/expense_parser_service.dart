@@ -390,7 +390,26 @@ class ExpenseParserService {
     required String transactionType,
   }) {
     if (transactionType == 'income') {
-      return ('Income', null);
+      final combined = '$text $description';
+      if (RegExp(r'\b(salary|payroll|paycheck)\b').hasMatch(combined)) {
+        return ('Salary', null);
+      }
+      if (RegExp(r'\b(business|sales?|revenue|profit)\b').hasMatch(combined)) {
+        return ('Business', null);
+      }
+      if (RegExp(r'\b(freelance|contract|client payment)\b').hasMatch(combined)) {
+        return ('Freelance', null);
+      }
+      if (RegExp(r'\b(investment|dividend|interest|returns?)\b').hasMatch(combined)) {
+        return ('Investment', null);
+      }
+      if (RegExp(r'\b(bonus|incentive)\b').hasMatch(combined)) {
+        return ('Bonus', null);
+      }
+      if (RegExp(r'\b(gift|gifted|present)\b').hasMatch(combined)) {
+        return ('Gifts', null);
+      }
+      return ('Other', null);
     }
     if (transactionType == 'transfer' ||
         transactionType == 'credit_card_payment') {

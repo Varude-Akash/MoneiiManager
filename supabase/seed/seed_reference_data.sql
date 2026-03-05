@@ -15,8 +15,13 @@ insert into public.categories (id, name, icon, color, parent_id) values
   (7, 'Education', 'school', '#3B82F6', null),
   (8, 'Travel', 'flight', '#F97316', null),
   (9, 'Personal', 'person', '#EC4899', null),
-  (10, 'Income', 'wallet', '#34D399', null),
-  (11, 'Other', 'category', '#94A3B8', null);
+  (10, 'Salary', 'wallet', '#34D399', null),
+  (11, 'Business', 'wallet', '#22C55E', null),
+  (12, 'Freelance', 'wallet', '#16A34A', null),
+  (13, 'Investment', 'wallet', '#10B981', null),
+  (14, 'Bonus', 'wallet', '#059669', null),
+  (15, 'Gifts', 'wallet', '#34D399', null),
+  (16, 'Other', 'category', '#94A3B8', null);
 
 insert into public.categories (id, name, parent_id) values
   (101, 'Groceries', 1),
@@ -79,15 +84,9 @@ insert into public.categories (id, name, parent_id) values
   (903, 'Donations & Charity', 9),
   (904, 'Pets', 9),
 
-  (1001, 'Salary', 10),
-  (1002, 'Freelance', 10),
-  (1003, 'Investments', 10),
-  (1004, 'Refunds', 10),
-  (1005, 'Gifts Received', 10),
-
-  (1101, 'Miscellaneous', 11),
-  (1102, 'ATM Withdrawal', 11),
-  (1103, 'Fees & Charges', 11);
+  (1601, 'Miscellaneous', 16),
+  (1602, 'ATM Withdrawal', 16),
+  (1603, 'Fees & Charges', 16);
 
 insert into public.premium_features (feature_key, name, description, is_active) values
   ('ai_spending_insights', 'AI Spending Insights', 'Analyze spending patterns and provide personalized tips.', false),

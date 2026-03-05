@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/core/constants.dart';
@@ -68,6 +69,16 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 }
 
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
+  static const List<String> _incomeCategoryNames = [
+    'Salary',
+    'Business',
+    'Freelance',
+    'Investment',
+    'Bonus',
+    'Gifts',
+    'Other',
+  ];
+
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _confettiController = ConfettiController(
@@ -85,6 +96,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   bool _isCategoryPickerOpen = false;
 
   bool get _isEditing => widget.initialExpense != null;
+  bool get _needsCategorySelection =>
+      _transactionType == 'expense' || _transactionType == 'income';
+  bool get _supportsSubcategories => _transactionType == 'expense';
 
   @override
   void initState() {
@@ -155,7 +169,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     required String categoryName,
     String? subcategoryName,
   }) {
-    final groups = ref.read(categoryTreeProvider);
+    final allCategories = ref.read(categoriesProvider).valueOrNull ?? const [];
+    final groups = _categoryGroupsForTransaction(
+      ref.read(categoryTreeProvider),
+      allCategories,
+    );
     for (final group in groups) {
       if (group.parent.name.toLowerCase() == categoryName.toLowerCase()) {
         setState(() {
@@ -163,7 +181,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           _selectedSubcategoryId = null;
         });
 
-        if (subcategoryName != null) {
+        if (_supportsSubcategories && subcategoryName != null) {
           for (final subcategory in group.children) {
             if (subcategory.name.toLowerCase() ==
                 subcategoryName.toLowerCase()) {
@@ -219,10 +237,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _showError('Enter a valid amount');
       return;
     }
-    if (_selectedCategoryId == null) {
-      _showError('Choose a category');
-      return;
-    }
 
     final accounts =
         ref.read(financialAccountsProvider).valueOrNull ?? const [];
@@ -276,10 +290,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
     }
 
+    final resolvedCategoryId = await _resolveCategoryId(client);
+    if (resolvedCategoryId == null) return;
+
     final categoryRow = await client
         .from('categories')
         .select('id')
-        .eq('id', _selectedCategoryId!)
+        .eq('id', resolvedCategoryId)
         .maybeSingle();
     if (categoryRow == null) {
       _showError(
@@ -288,7 +305,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       return;
     }
 
-    if (_selectedSubcategoryId != null) {
+    if (_supportsSubcategories && _selectedSubcategoryId != null) {
       final subcategoryRow = await client
           .from('categories')
           .select('id, parent_id')
@@ -313,8 +330,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       userId: user.id,
       amount: amount,
       currency: selectedCurrency,
-      categoryId: _selectedCategoryId!,
-      subcategoryId: _selectedSubcategoryId,
+      categoryId: resolvedCategoryId,
+      subcategoryId: _supportsSubcategories ? _selectedSubcategoryId : null,
       categoryName: '',
       subcategoryName: null,
       description: _descriptionController.text.trim().isEmpty
@@ -527,6 +544,86 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
   }
 
+  Future<int?> _resolveCategoryId(SupabaseClient client) async {
+    if (_transactionType == 'transfer' ||
+        _transactionType == 'credit_card_payment') {
+      final categories = await client
+          .from('categories')
+          .select('id,name,parent_id')
+          .order('id');
+      final rows = (categories as List).whereType<Map<String, dynamic>>().toList();
+      if (rows.isEmpty) {
+        _showError(
+          'Category data is missing in this environment. Please initialize categories and try again.',
+        );
+        return null;
+      }
+      final otherRoot = rows.firstWhere(
+        (row) =>
+            row['parent_id'] == null &&
+            (row['name'] as String?)?.trim().toLowerCase() == 'other',
+        orElse: () => rows.firstWhere(
+          (row) => row['parent_id'] == null,
+          orElse: () => rows.first,
+        ),
+      );
+      final id = otherRoot['id'];
+      if (id is int) return id;
+      if (id is num) return id.toInt();
+      _showError('Invalid category configuration.');
+      return null;
+    }
+
+    if (_selectedCategoryId == null) {
+      _showError('Choose a category');
+      return null;
+    }
+    return _selectedCategoryId;
+  }
+
+  List<CategoryGroup> _categoryGroupsForTransaction(
+    List<CategoryGroup> categoryTree,
+    List<ExpenseCategory> allCategories,
+  ) {
+    if (_transactionType == 'expense') {
+      return categoryTree
+          .where((group) => group.parent.name.toLowerCase() != 'income')
+          .toList();
+    }
+    if (_transactionType != 'income') return const [];
+
+    ExpenseCategory? pickByName(String expected, {List<String> aliases = const []}) {
+      ExpenseCategory? bestRoot;
+      ExpenseCategory? fallbackAny;
+      for (final category in allCategories) {
+        final name = category.name.trim().toLowerCase();
+        final isMatch =
+            name == expected.toLowerCase() ||
+            aliases.any((alias) => alias.toLowerCase() == name);
+        if (!isMatch) continue;
+        fallbackAny ??= category;
+        if (category.parentId == null) {
+          bestRoot = category;
+          break;
+        }
+      }
+      return bestRoot ?? fallbackAny;
+    }
+
+    final groups = <CategoryGroup>[];
+    for (final name in _incomeCategoryNames) {
+      final category = switch (name.toLowerCase()) {
+        'investment' => pickByName('Investment', aliases: ['Investments']),
+        'gifts' => pickByName('Gifts', aliases: ['Gifts Received']),
+        _ => pickByName(name),
+      };
+      if (category != null) {
+        groups.add(CategoryGroup(parent: category, children: const []));
+      }
+    }
+    return groups;
+  }
+
   String _transactionTypeLabel(String value) {
     switch (value) {
       case 'income':
@@ -589,8 +686,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (selectedGroup == null) return 'Choose category';
 
     final parentName = selectedGroup.parent.name;
-    if (_selectedSubcategoryId == null) {
-      return '$parentName • Other';
+    if (!_supportsSubcategories || _selectedSubcategoryId == null) {
+      return _supportsSubcategories ? '$parentName • Other' : parentName;
     }
 
     for (final sub in selectedGroup.children) {
@@ -603,7 +700,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categoryTree = ref.watch(categoryTreeProvider);
+    final allCategories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categoryTree = _categoryGroupsForTransaction(
+      ref.watch(categoryTreeProvider),
+      allCategories,
+    );
     final accounts =
         ref.watch(financialAccountsProvider).valueOrNull ?? const [];
     final preferredCurrency =
@@ -656,6 +757,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               _transactionType = value;
               _selectedAccountId = null;
               _selectedDestinationAccountId = null;
+              _selectedCategoryId = null;
+              _selectedSubcategoryId = null;
+              _isCategoryPickerOpen = false;
             }),
             labelBuilder: _transactionTypeLabel,
           ),
@@ -719,62 +823,65 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               },
             ),
           ],
-          const SizedBox(height: 20),
-          const Text(
-            'Category',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _CategoryPickerTile(
-            label: _selectedCategoryLabel(categoryTree),
-            isOpen: _isCategoryPickerOpen,
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() {
-                _isCategoryPickerOpen = !_isCategoryPickerOpen;
-              });
-            },
-          ),
-          if (_isCategoryPickerOpen) ...[
-            const SizedBox(height: 12),
-            _CategoryGrid(
-              groups: categoryTree,
-              selectedCategoryId: _selectedCategoryId,
-              onCategoryTap: (group) {
-                HapticFeedback.selectionClick();
-                setState(() {
-                  if (_selectedCategoryId == group.parent.id) {
-                    _selectedCategoryId = null;
-                    _selectedSubcategoryId = null;
-                  } else {
-                    _selectedCategoryId = group.parent.id;
-                    _selectedSubcategoryId = null;
-                  }
-                });
-              },
-            ),
-          ],
-          if (_isCategoryPickerOpen &&
-              _selectedCategoryId != null &&
-              categoryTree.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _SubcategoryChips(
-              group: categoryTree.firstWhere(
-                (group) => group.parent.id == _selectedCategoryId,
-                orElse: () => categoryTree.first,
+          if (_needsCategorySelection) ...[
+            const SizedBox(height: 20),
+            const Text(
+              'Category',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
-              selectedSubcategoryId: _selectedSubcategoryId,
-              onTap: (subcategoryId) {
+            ),
+            const SizedBox(height: 12),
+            _CategoryPickerTile(
+              label: _selectedCategoryLabel(categoryTree),
+              isOpen: _isCategoryPickerOpen,
+              onTap: () {
                 HapticFeedback.selectionClick();
                 setState(() {
-                  _selectedSubcategoryId = subcategoryId;
+                  _isCategoryPickerOpen = !_isCategoryPickerOpen;
                 });
               },
             ),
+            if (_isCategoryPickerOpen) ...[
+              const SizedBox(height: 12),
+              _CategoryGrid(
+                groups: categoryTree,
+                selectedCategoryId: _selectedCategoryId,
+                onCategoryTap: (group) {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    if (_selectedCategoryId == group.parent.id) {
+                      _selectedCategoryId = null;
+                      _selectedSubcategoryId = null;
+                    } else {
+                      _selectedCategoryId = group.parent.id;
+                      _selectedSubcategoryId = null;
+                    }
+                  });
+                },
+              ),
+            ],
+            if (_supportsSubcategories &&
+                _isCategoryPickerOpen &&
+                _selectedCategoryId != null &&
+                categoryTree.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _SubcategoryChips(
+                group: categoryTree.firstWhere(
+                  (group) => group.parent.id == _selectedCategoryId,
+                  orElse: () => categoryTree.first,
+                ),
+                selectedSubcategoryId: _selectedSubcategoryId,
+                onTap: (subcategoryId) {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    _selectedSubcategoryId = subcategoryId;
+                  });
+                },
+              ),
+            ],
           ],
           const SizedBox(height: 28),
           SizedBox(

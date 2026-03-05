@@ -865,88 +865,100 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final media = MediaQuery.of(context);
+            final maxContentHeight =
+                (media.size.height - media.viewInsets.bottom) * 0.46;
             return AlertDialog(
+              scrollable: true,
               title: const Text('Add Account'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Name (e.g. HDFC Salary)',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: type,
-                    decoration: const InputDecoration(labelText: 'Type'),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'bank_account',
-                        child: Text('Bank Account'),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxContentHeight),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Name (e.g. HDFC Salary)',
+                        ),
                       ),
-                      DropdownMenuItem(
-                        value: 'credit_card',
-                        child: Text('Credit Card'),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: type,
+                        decoration: const InputDecoration(labelText: 'Type'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'bank_account',
+                            child: Text('Bank Account'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'credit_card',
+                            child: Text('Credit Card'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'wallet',
+                            child: Text('Wallet'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              type = value;
+                            });
+                          }
+                        },
                       ),
-                      DropdownMenuItem(value: 'wallet', child: Text('Wallet')),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: balanceController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: type == 'credit_card'
+                              ? 'Credit limit'
+                              : 'Account balance (optional)',
+                          hintText: type == 'credit_card'
+                              ? 'Enter your card limit'
+                              : 'Leave empty to start from 0',
+                        ),
+                      ),
+                      if (type == 'credit_card') ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: utilizedController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Currently utilized (optional)',
+                            hintText: 'Leave empty for 0',
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        type == 'credit_card'
+                            ? 'Tip: We track cards using limit and utilized amount. Available credit is shown as limit minus utilized.'
+                            : 'Tip: Adding initial balance helps track account balance accurately. '
+                                  'If you leave it empty, it starts at 0 and can go negative after expenses.',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        value: isDefault,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Set as default'),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            isDefault = value ?? false;
+                          });
+                        },
+                      ),
                     ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() {
-                          type = value;
-                        });
-                      }
-                    },
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: balanceController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: type == 'credit_card'
-                          ? 'Credit limit'
-                          : 'Account balance (optional)',
-                      hintText: type == 'credit_card'
-                          ? 'Enter your card limit'
-                          : 'Leave empty to start from 0',
-                    ),
-                  ),
-                  if (type == 'credit_card') ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: utilizedController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Currently utilized (optional)',
-                        hintText: 'Leave empty for 0',
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Text(
-                    type == 'credit_card'
-                        ? 'Tip: We track cards using limit and utilized amount. Available credit is shown as limit minus utilized.'
-                        : 'Tip: Adding initial balance helps track account balance accurately. '
-                              'If you leave it empty, it starts at 0 and can go negative after expenses.',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                  ),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    value: isDefault,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Set as default'),
-                    onChanged: (value) {
-                      setDialogState(() {
-                        isDefault = value ?? false;
-                      });
-                    },
-                  ),
-                ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -1042,49 +1054,58 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final media = MediaQuery.of(context);
+            final maxContentHeight =
+                (media.size.height - media.viewInsets.bottom) * 0.46;
             return AlertDialog(
+              scrollable: true,
               title: const Text('Edit Account'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Name'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: balanceController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: account.accountType == 'credit_card'
-                          ? 'Credit limit'
-                          : 'Account balance',
-                    ),
-                  ),
-                  if (account.accountType == 'credit_card') ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: utilizedController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+              content: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxContentHeight),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: 'Name'),
                       ),
-                      decoration: const InputDecoration(
-                        labelText: 'Current utilized amount',
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: balanceController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: account.accountType == 'credit_card'
+                              ? 'Credit limit'
+                              : 'Account balance',
+                        ),
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    value: isDefault,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Set as default'),
-                    onChanged: (value) {
-                      setDialogState(() => isDefault = value ?? false);
-                    },
+                      if (account.accountType == 'credit_card') ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: utilizedController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Current utilized amount',
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        value: isDefault,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Set as default'),
+                        onChanged: (value) {
+                          setDialogState(() => isDefault = value ?? false);
+                        },
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
               actions: [
                 TextButton(
