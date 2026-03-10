@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:moneii_manager/config/theme.dart';
+import 'package:moneii_manager/core/ads/interstitial_ad_controller.dart';
 import 'package:moneii_manager/core/constants.dart';
 import 'package:moneii_manager/core/utils/currency_utils.dart';
 import 'package:moneii_manager/core/utils/date_utils.dart';
@@ -17,6 +18,7 @@ import 'package:moneii_manager/features/expenses/presentation/providers/category
 import 'package:moneii_manager/features/expenses/presentation/providers/expense_provider.dart';
 import 'package:moneii_manager/features/profile/domain/entities/financial_account.dart';
 import 'package:moneii_manager/features/profile/presentation/providers/financial_account_provider.dart';
+import 'package:moneii_manager/features/subscriptions/presentation/providers/revenuecat_provider.dart';
 import 'package:moneii_manager/features/voice/domain/entities/parsed_expense.dart';
 import 'package:moneii_manager/features/voice/presentation/screens/voice_input_sheet.dart';
 
@@ -103,6 +105,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   @override
   void initState() {
     super.initState();
+    ref.read(interstitialAdControllerProvider.notifier).preload();
     final initialExpense = widget.initialExpense;
     final initialData = widget.initialData;
 
@@ -352,6 +355,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         await ref.read(updateExpenseProvider.notifier).updateExpense(expense);
       } else {
         await ref.read(addExpenseProvider.notifier).addExpense(expense);
+
+        final profile = ref.read(profileProvider).valueOrNull;
+        final purchases = ref.read(revenueCatProvider);
+        final hasPaidAccess =
+            (profile?.isPremium ?? false) ||
+            purchases.hasMoneiiPro ||
+            purchases.hasMoneiiProPlus;
+
+        await ref
+            .read(interstitialAdControllerProvider.notifier)
+            .registerSuccessfulTransaction(isFreeUser: !hasPaidAccess);
       }
 
       if (!mounted) return;

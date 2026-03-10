@@ -17,6 +17,7 @@ import 'package:moneii_manager/features/expenses/domain/entities/category.dart';
 import 'package:moneii_manager/features/expenses/domain/entities/expense.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/category_provider.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/expense_provider.dart';
+import 'package:moneii_manager/features/goals/presentation/providers/goals_provider.dart';
 import 'package:moneii_manager/features/health_score/presentation/widgets/health_score_card.dart';
 import 'package:moneii_manager/features/wrapped/presentation/providers/wrapped_provider.dart';
 import 'package:moneii_manager/shared/widgets/glass_card.dart';
@@ -69,6 +70,8 @@ class AnalyticsScreen extends ConsumerWidget {
           const HealthScoreCard(),
           const SizedBox(height: 8),
           _BudgetsSection(selectedMonth: summary.selectedMonth),
+          const SizedBox(height: 8),
+          const _GoalsSummarySection(),
           const SizedBox(height: 10),
           _SelectedMonthSpendCard(summary: summary),
           const SizedBox(height: 12),
@@ -1581,6 +1584,138 @@ class _BudgetsSection extends ConsumerWidget {
                       );
                     },
                   ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─── Goals Summary Section ────────────────────────────────────────────────────
+
+class _GoalsSummarySection extends ConsumerWidget {
+  const _GoalsSummarySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final goalsAsync = ref.watch(savingsGoalsProvider);
+    final goals = goalsAsync.valueOrNull ?? [];
+    final active = goals.where((g) => !g.isCompleted).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Iconsax.chart_21, color: AppColors.primary, size: 15),
+            const SizedBox(width: 6),
+            const Text(
+              'Goals',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => context.push('/goals'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'See all',
+                  style: TextStyle(color: AppColors.primary, fontSize: 11),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (active.isEmpty)
+          GestureDetector(
+            onTap: () => context.push('/goals'),
+            child: const Text(
+              'No active goals. Tap "See all" to add one.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+            ),
+          )
+        else
+          SizedBox(
+            height: 78,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: active.length,
+              itemBuilder: (context, index) {
+                final goal = active[index];
+                final ratio = goal.progress;
+                final color = ratio >= 1.0
+                    ? AppColors.success
+                    : ratio >= 0.7
+                        ? AppColors.primary
+                        : AppColors.textSecondary;
+                return GestureDetector(
+                  onTap: () => context.push('/goals'),
+                  child: Container(
+                    width: 108,
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(goal.icon, style: const TextStyle(fontSize: 12)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                goal.name,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${CurrencyUtils.formatCompact(goal.currentAmount)} / ${CurrencyUtils.formatCompact(goal.targetAmount)}',
+                          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w500),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Spacer(),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(100),
+                          child: LinearProgressIndicator(
+                            value: ratio,
+                            minHeight: 4,
+                            backgroundColor: AppColors.glassBorder.withValues(alpha: 0.6),
+                            valueColor: AlwaysStoppedAnimation<Color>(color),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${(ratio * 100).toStringAsFixed(0)}% saved',
+                          style: const TextStyle(color: AppColors.textMuted, fontSize: 9),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
       ],
     );
