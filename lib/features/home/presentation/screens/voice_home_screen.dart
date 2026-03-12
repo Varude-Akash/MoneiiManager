@@ -374,7 +374,7 @@ class _VoiceHomeScreenState extends ConsumerState<VoiceHomeScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       const Text(
-                                        'Meet Moneii AI',
+                                        'Meet Zora',
                                         style: TextStyle(
                                           color: AppColors.textPrimary,
                                           fontWeight: FontWeight.w700,

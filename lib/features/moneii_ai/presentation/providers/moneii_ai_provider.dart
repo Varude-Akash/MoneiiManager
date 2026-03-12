@@ -84,7 +84,7 @@ class MoneiiAiNotifier extends StateNotifier<MoneiiAiState> {
             MoneiiAiMessage(
               role: 'assistant',
               text:
-                  'I am Moneii AI. Ask me anything about your spending, income, transfers, and trends.',
+                  'I am Zora, your personal financial AI assistant. Ask me anything about your spending, income, transfers, and trends.',
               createdAt: DateTime.now(),
             ),
           ],

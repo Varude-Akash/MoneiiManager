@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
       throw new Error('No audio transcript detected. Please try again.');
     }
 
-    const description = await summarizeDescription(transcript);
+    const parsed = await parseExpenseDetails(transcript);
 
     if (requestId != null) {
       await supabase
@@ -188,7 +188,9 @@ Deno.serve(async (req) => {
 
     return json({
       transcript,
-      description,
+      description: parsed.description,
+      suggested_category: parsed.category_name,
+      suggested_subcategory: parsed.subcategory_name,
       usage: {
         daily_used: confirmedDailyUsed,
         daily_limit: dailyLimit,
@@ -311,7 +313,15 @@ async function callWhisper(
   return await response.json();
 }
 
-async function summarizeDescription(transcript: string): Promise<string | null> {
+interface ParsedVoiceExpense {
+  description: string | null;
+  category_name: string | null;
+  subcategory_name: string | null;
+}
+
+async function parseExpenseDetails(transcript: string): Promise<ParsedVoiceExpense> {
+  const empty: ParsedVoiceExpense = { description: null, category_name: null, subcategory_name: null };
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -320,13 +330,30 @@ async function summarizeDescription(transcript: string): Promise<string | null> 
     },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
-      temperature: 0.1,
+      temperature: 0,
+      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
           content:
-            'Convert voice finance transcripts into a short meaningful description. ' +
-            'Return only 2-5 words, no quotes, no full sentence.',
+            'You parse personal finance voice transcripts. Return JSON with exactly these keys:\n' +
+            '- "description": 2-5 word summary including the app/store/brand name if mentioned (e.g. "Swiggy pizza order", "Amazon chair", "Blinkit groceries", "Ola ride"). No quotes, plain words.\n' +
+            '- "category_name": best matching top-level category from this exact list: ' +
+            '"Food & Dining", "Transport", "Entertainment", "Shopping", "Bills & Utilities", ' +
+            '"Health & Fitness", "Education", "Travel", "Personal", "Other", ' +
+            '"Salary", "Business", "Freelance", "Investment", "Bonus", "Gifts"\n' +
+            '- "subcategory_name": best matching subcategory or null\n\n' +
+            'Category rules (Indian context):\n' +
+            'Swiggy/Zomato/food delivery → "Food & Dining" / "Meal Delivery"\n' +
+            'Blinkit/Zepto/BigBasket/Dunzo/grocery → "Food & Dining" / "Groceries"\n' +
+            'Ola/Uber/Rapido/auto/cab/rickshaw → "Transport" / "Ride Share"\n' +
+            'Amazon/Flipkart/Meesho/Myntra/Nykaa → "Shopping" / "Online Shopping"\n' +
+            'Netflix/Hotstar/JioCinema/Spotify/YouTube Premium → "Entertainment" / "Streaming Subscriptions"\n' +
+            'Jio/Airtel/BSNL/Vi/phone recharge → "Bills & Utilities" / "Phone"\n' +
+            'Electricity/internet/rent/EMI → "Bills & Utilities"\n' +
+            'Gym/doctor/hospital/medicine/pharmacy → "Health & Fitness"\n' +
+            'salary/received/credited/income → use income categories like "Salary"\n' +
+            'transfer/moved → "Other"',
         },
         {
           role: 'user',
@@ -336,18 +363,24 @@ async function summarizeDescription(transcript: string): Promise<string | null> 
     }),
   });
 
-  if (!response.ok) return null;
+  if (!response.ok) return empty;
+
   const jsonData = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
-  const value = jsonData.choices?.[0]?.message?.content?.trim();
-  if (!value) return null;
-  return value
-    .replaceAll(/["`]+/g, '')
-    .replaceAll(/\s+/g, ' ')
-    .replaceAll(/[.,;:!?]+$/g, '')
-    .trim()
-    .slice(0, 42);
+
+  try {
+    const content = jsonData.choices?.[0]?.message?.content ?? '{}';
+    const p = JSON.parse(content) as Record<string, unknown>;
+    const description = typeof p.description === 'string'
+      ? p.description.replaceAll(/["`]+/g, '').replaceAll(/\s+/g, ' ').replaceAll(/[.,;:!?]+$/g, '').trim().slice(0, 42)
+      : null;
+    const category_name = typeof p.category_name === 'string' ? p.category_name.trim() : null;
+    const subcategory_name = typeof p.subcategory_name === 'string' ? p.subcategory_name.trim() : null;
+    return { description: description || null, category_name, subcategory_name };
+  } catch {
+    return empty;
+  }
 }
 
 function json(payload: Record<string, unknown>, status = 200): Response {

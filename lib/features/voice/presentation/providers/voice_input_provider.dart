@@ -69,13 +69,19 @@ class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
         );
         return;
       }
-      final parsed = _parser.parse(transcript);
-      final aiDescription = result.description;
-      state = VoiceParsed(
-        aiDescription == null || aiDescription.isEmpty
-            ? parsed
-            : parsed.copyWith(description: aiDescription),
-      );
+      var parsed = _parser.parse(transcript);
+      // Override description with GPT-generated one if available.
+      if (result.description != null && result.description!.isNotEmpty) {
+        parsed = parsed.copyWith(description: result.description);
+      }
+      // Override category with GPT-suggested one if available (more accurate than keyword matching).
+      if (result.suggestedCategory != null && result.suggestedCategory!.isNotEmpty) {
+        parsed = parsed.copyWith(
+          categoryName: result.suggestedCategory,
+          subcategoryName: result.suggestedSubcategory,
+        );
+      }
+      state = VoiceParsed(parsed);
     } catch (e) {
       state = VoiceError(_friendlyError(e.toString()));
     }

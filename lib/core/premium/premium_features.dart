@@ -71,7 +71,7 @@ const premiumFeatureCatalog = <PremiumFeatureMeta>[
   ),
   PremiumFeatureMeta(
     key: PremiumFeatureKey.aiFinancialCoach,
-    title: 'Moneii AI',
+    title: 'Zora',
     description:
         'Ask anything about your spending, income, transfers, and money trends with personalized guidance from your own data.',
   ),

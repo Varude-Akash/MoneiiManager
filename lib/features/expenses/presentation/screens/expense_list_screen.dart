@@ -104,6 +104,12 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
                         setState(() => _selectedMonth = month);
                       },
                     ),
+                    const SizedBox(height: 10),
+                    _MonthlySummaryStrip(
+                      expenses: visibleExpenses,
+                      preferredCurrency: preferredCurrency,
+                      usdRates: usdRates,
+                    ),
                     const SizedBox(height: 72),
                     const _EmptyState(),
                   ],
@@ -130,6 +136,12 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
                     onChanged: (month) {
                       setState(() => _selectedMonth = month);
                     },
+                  ),
+                  const SizedBox(height: 10),
+                  _MonthlySummaryStrip(
+                    expenses: visibleExpenses,
+                    preferredCurrency: preferredCurrency,
+                    usdRates: usdRates,
                   ),
                   const SizedBox(height: 16),
                   if (grouped.isEmpty)
@@ -237,7 +249,7 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
   }
 }
 
-class _TransactionMonthSelector extends StatefulWidget {
+class _TransactionMonthSelector extends StatelessWidget {
   const _TransactionMonthSelector({
     required this.selectedMonth,
     required this.earliestMonth,
@@ -249,147 +261,91 @@ class _TransactionMonthSelector extends StatefulWidget {
   final ValueChanged<DateTime> onChanged;
 
   @override
-  State<_TransactionMonthSelector> createState() =>
-      _TransactionMonthSelectorState();
-}
-
-class _TransactionMonthSelectorState extends State<_TransactionMonthSelector> {
-  late final ScrollController _controller;
-  var _canScrollLeft = false;
-  var _canScrollRight = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = ScrollController()..addListener(_syncIndicators);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncIndicators());
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_syncIndicators);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _syncIndicators() {
-    if (!_controller.hasClients) return;
-    final max = _controller.position.maxScrollExtent;
-    final offset = _controller.offset;
-    final nextLeft = offset > 4;
-    final nextRight = offset < max - 4;
-    if (nextLeft != _canScrollLeft || nextRight != _canScrollRight) {
-      setState(() {
-        _canScrollLeft = nextLeft;
-        _canScrollRight = nextRight;
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final monthCount =
-        ((now.year - widget.earliestMonth.year) * 12) +
-        (now.month - widget.earliestMonth.month) +
-        1;
-    final safeCount = monthCount.clamp(1, 600);
-    final months = List.generate(
-      safeCount,
-      (index) => DateTime(now.year, now.month - index),
-    );
+    final currentMonth = DateTime(now.year, now.month);
+    final canGoPrev = selectedMonth.year > earliestMonth.year ||
+        (selectedMonth.year == earliestMonth.year &&
+            selectedMonth.month > earliestMonth.month);
+    final canGoNext = selectedMonth.isBefore(currentMonth);
 
-    return SizedBox(
-      height: 36,
-      child: Row(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ListView.separated(
-                  controller: _controller,
-                  scrollDirection: Axis.horizontal,
-                  itemCount: months.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final month = months[index];
-                    final selected =
-                        month.year == widget.selectedMonth.year &&
-                        month.month == widget.selectedMonth.month;
-                    return ChoiceChip(
-                      label: Text(
-                        AppDateUtils.formatMonth(month),
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
-                      visualDensity: const VisualDensity(
-                        horizontal: -2,
-                        vertical: -2,
-                      ),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      selected: selected,
-                      onSelected: (_) =>
-                          widget.onChanged(DateTime(month.year, month.month)),
-                    );
-                  },
-                ),
-                if (_canScrollLeft)
-                  const Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: _HorizontalEdgeIndicator(
-                      alignment: Alignment.centerLeft,
-                      icon: Icons.chevron_left_rounded,
-                    ),
-                  ),
-                if (_canScrollRight)
-                  const Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: _HorizontalEdgeIndicator(
-                      alignment: Alignment.centerRight,
-                      icon: Icons.chevron_right_rounded,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Jump to month',
-            visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            onPressed: () async {
-              final now = DateTime.now();
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: widget.selectedMonth,
-                firstDate: widget.earliestMonth,
-                lastDate: DateTime(now.year, now.month, now.day),
-                builder: (context, child) {
-                  return Theme(
-                    data: Theme.of(context).copyWith(
-                      colorScheme: const ColorScheme.dark(
-                        primary: AppColors.primary,
-                        surface: AppColors.surface,
-                      ),
-                    ),
-                    child: child ?? const SizedBox.shrink(),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        IconButton(
+          onPressed: canGoPrev
+              ? () {
+                  final prev = DateTime(
+                    selectedMonth.year,
+                    selectedMonth.month - 1,
                   );
-                },
-              );
-              if (picked != null) {
-                widget.onChanged(DateTime(picked.year, picked.month));
-              }
-            },
-            icon: const Icon(Icons.calendar_month_rounded),
+                  onChanged(prev);
+                }
+              : null,
+          icon: const Icon(Icons.chevron_left_rounded),
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        ),
+        GestureDetector(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: selectedMonth,
+              firstDate: earliestMonth,
+              lastDate: DateTime(now.year, now.month, now.day),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.dark(
+                      primary: AppColors.primary,
+                      surface: AppColors.surface,
+                    ),
+                  ),
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
+            );
+            if (picked != null) {
+              onChanged(DateTime(picked.year, picked.month));
+            }
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                AppDateUtils.formatMonth(selectedMonth),
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.calendar_month_rounded,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        IconButton(
+          onPressed: canGoNext
+              ? () {
+                  final next = DateTime(
+                    selectedMonth.year,
+                    selectedMonth.month + 1,
+                  );
+                  onChanged(next);
+                }
+              : null,
+          icon: const Icon(Icons.chevron_right_rounded),
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        ),
+      ],
     );
   }
 }
@@ -778,6 +734,107 @@ class _AccountBalanceScrollerState
   }
 }
 
+class _MonthlySummaryStrip extends StatelessWidget {
+  const _MonthlySummaryStrip({
+    required this.expenses,
+    required this.preferredCurrency,
+    required this.usdRates,
+  });
+
+  final List<Expense> expenses;
+  final String preferredCurrency;
+  final Map<String, double> usdRates;
+
+  @override
+  Widget build(BuildContext context) {
+    double totalIncome = 0;
+    double totalExpense = 0;
+
+    for (final e in expenses) {
+      final converted = CurrencyUtils.convert(
+        e.amount,
+        fromCurrency: e.currency,
+        toCurrency: preferredCurrency,
+        usdRates: usdRates,
+      );
+      if (e.transactionType == 'income') {
+        totalIncome += converted;
+      } else if (e.transactionType == 'expense') {
+        totalExpense += converted;
+      }
+    }
+
+    final net = totalIncome - totalExpense;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          _SummaryCell(
+            label: 'Income',
+            amount: CurrencyUtils.formatCompact(totalIncome, currency: preferredCurrency),
+            color: AppColors.accentGreen,
+          ),
+          Container(width: 1, height: 28, color: AppColors.glassBorder),
+          _SummaryCell(
+            label: 'Expense',
+            amount: CurrencyUtils.formatCompact(totalExpense, currency: preferredCurrency),
+            color: AppColors.error,
+          ),
+          Container(width: 1, height: 28, color: AppColors.glassBorder),
+          _SummaryCell(
+            label: 'Net',
+            amount: '${net >= 0 ? '+' : '-'}${CurrencyUtils.formatCompact(net.abs(), currency: preferredCurrency)}',
+            color: net >= 0 ? AppColors.accentGreen : AppColors.error,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryCell extends StatelessWidget {
+  const _SummaryCell({
+    required this.label,
+    required this.amount,
+    required this.color,
+  });
+
+  final String label;
+  final String amount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            amount,
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HorizontalEdgeIndicator extends StatelessWidget {
   const _HorizontalEdgeIndicator({required this.alignment, required this.icon});
 
@@ -918,6 +975,22 @@ class _ExpenseGroup extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    double dayIncome = 0;
+    double dayExpense = 0;
+    for (final e in expenses) {
+      final converted = CurrencyUtils.convert(
+        e.amount,
+        fromCurrency: e.currency,
+        toCurrency: preferredCurrency,
+        usdRates: usdRates,
+      );
+      if (e.transactionType == 'income') {
+        dayIncome += converted;
+      } else if (e.transactionType == 'expense') {
+        dayExpense += converted;
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -925,13 +998,41 @@ class _ExpenseGroup extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
-            child: Text(
-              AppDateUtils.formatGroupHeader(date),
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Row(
+              children: [
+                Text(
+                  AppDateUtils.formatGroupHeader(date),
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                if (dayIncome > 0)
+                  Text(
+                    '+${CurrencyUtils.formatCompact(dayIncome, currency: preferredCurrency)}',
+                    style: const TextStyle(
+                      color: AppColors.accentGreen,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                if (dayIncome > 0 && dayExpense > 0)
+                  const Text(
+                    '  ',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                if (dayExpense > 0)
+                  Text(
+                    '-${CurrencyUtils.formatCompact(dayExpense, currency: preferredCurrency)}',
+                    style: const TextStyle(
+                      color: AppColors.error,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
             ),
           ),
           ...expenses.map((expense) {

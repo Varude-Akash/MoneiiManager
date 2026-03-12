@@ -4,10 +4,17 @@ import 'package:moneii_manager/config/env.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class VoiceTranscriptionResult {
-  const VoiceTranscriptionResult({required this.transcript, this.description});
+  const VoiceTranscriptionResult({
+    required this.transcript,
+    this.description,
+    this.suggestedCategory,
+    this.suggestedSubcategory,
+  });
 
   final String transcript;
   final String? description;
+  final String? suggestedCategory;
+  final String? suggestedSubcategory;
 }
 
 class WhisperRemoteDatasource {
@@ -62,6 +69,8 @@ class WhisperRemoteDatasource {
   VoiceTranscriptionResult _parseResponse(Map<String, dynamic> data) {
     final transcript = (data['transcript'] as String?)?.trim() ?? '';
     final description = (data['description'] as String?)?.trim();
+    final suggestedCategory = (data['suggested_category'] as String?)?.trim();
+    final suggestedSubcategory = (data['suggested_subcategory'] as String?)?.trim();
 
     if (transcript.isEmpty) {
       throw Exception(
@@ -72,9 +81,9 @@ class WhisperRemoteDatasource {
 
     return VoiceTranscriptionResult(
       transcript: transcript,
-      description: description == null || description.isEmpty
-          ? null
-          : description,
+      description: description == null || description.isEmpty ? null : description,
+      suggestedCategory: suggestedCategory == null || suggestedCategory.isEmpty ? null : suggestedCategory,
+      suggestedSubcategory: suggestedSubcategory == null || suggestedSubcategory.isEmpty ? null : suggestedSubcategory,
     );
   }
 

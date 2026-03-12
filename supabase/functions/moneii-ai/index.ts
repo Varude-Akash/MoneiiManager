@@ -17,6 +17,116 @@ const PREMIUM_PLUS_DAILY_LIMIT = 50;
 
 type PlanTier = 'free' | 'premium' | 'premium_plus';
 
+// ---------------------------------------------------------------------------
+// Schema description sent to GPT for SQL generation.
+// Tables are pre-filtered CTEs — GPT must only reference these names.
+// ---------------------------------------------------------------------------
+const SCHEMA_DESCRIPTION = `
+You have access to these pre-filtered tables (already scoped to the current user and allowed date range):
+
+1. filtered_expenses
+   - amount (numeric)
+   - currency (text)
+   - transaction_type: 'expense' | 'income' | 'transfer' | 'credit_card_payment'
+   - payment_source: 'cash' | 'bank_account' | 'credit_card' | 'wallet'
+   - description (text, nullable)
+   - expense_date (DATE, YYYY-MM-DD)
+   - category_name (text) — top-level category name, always one of the known values below
+   - subcategory_name (text, nullable) — specific subcategory chosen by the user, e.g. 'Groceries'
+
+   Known category_name values (EXACT spelling, case-sensitive):
+   Expense categories: 'Food & Dining', 'Transport', 'Entertainment', 'Shopping',
+     'Bills & Utilities', 'Health & Fitness', 'Education', 'Travel', 'Personal', 'Other'
+   Income categories: 'Salary', 'Business', 'Freelance', 'Investment', 'Bonus', 'Gifts'
+
+   Subcategories by parent (for subcategory_name):
+   'Food & Dining': 'Groceries', 'Restaurants', 'Coffee & Tea', 'Fast Food', 'Desserts', 'Alcohol & Bars', 'Meal Delivery'
+   'Transport': 'Fuel/Gas', 'Public Transit', 'Ride Share', 'Parking', 'Car Maintenance', 'Flights'
+   'Entertainment': 'Movies & TV', 'Music & Concerts', 'Gaming', 'Sports', 'Nightlife', 'Streaming Subscriptions'
+   'Shopping': 'Clothing & Fashion', 'Electronics', 'Home & Decor', 'Beauty & Personal Care', 'Gifts', 'Online Shopping'
+   'Bills & Utilities': 'Rent/Mortgage', 'Electricity', 'Water', 'Internet & WiFi', 'Phone', 'Insurance', 'Subscriptions'
+   'Health & Fitness': 'Gym & Fitness', 'Doctor & Hospital', 'Pharmacy/Medicine', 'Mental Health', 'Supplements'
+   'Education': 'Books', 'Courses & Online Learning', 'Tuition', 'Stationery', 'Software & Tools'
+   'Travel': 'Hotels', 'Flights', 'Activities', 'Travel Food', 'Travel Shopping'
+   'Personal': 'Haircut & Grooming', 'Laundry', 'Donations & Charity', 'Pets'
+
+   IMPORTANT filtering rules:
+   - "food", "eating", "dining" → WHERE category_name = 'Food & Dining'
+   - "groceries" → WHERE subcategory_name = 'Groceries'
+   - "income", "salary", "earnings" → WHERE transaction_type = 'income'
+   - "expenses", "spending" (generic) → WHERE transaction_type = 'expense'
+   - brand/app/store name (e.g. "amazon", "swiggy", "zomato", "netflix") → use description ILIKE '%amazon%'
+   - combine filters when appropriate: e.g. "amazon orders" → WHERE category_name = 'Shopping' AND description ILIKE '%amazon%'
+
+   OVERSPEND / BUDGET rules (CRITICAL):
+   - "overspend", "over budget", "spent too much" → ALWAYS filter transaction_type = 'expense'. NEVER include income categories.
+   - Income categories (Salary, Business, Freelance, Investment, Bonus, Gifts) MUST NEVER appear in any spending, overspend, or budget analysis.
+   - "Overspent" means actual expenses > budget amount. To find overspent categories:
+     JOIN filtered_budgets ON category_name = (SELECT name FROM all_categories WHERE id = filtered_budgets.category_id)
+     and compare SUM(amount) WHERE transaction_type = 'expense' against the budget amount.
+   - If no budget data exists, just show top expense categories by spend (still filter transaction_type = 'expense').
+   - Always add WHERE transaction_type = 'expense' (or AND transaction_type = 'expense') when the user asks about spending, overspending, or what categories cost the most.
+
+2. filtered_accounts
+   - name (text)
+   - account_type: 'bank_account' | 'credit_card' | 'wallet'
+   - current_balance (numeric)
+   - credit_limit (numeric) — only meaningful for credit_card type
+   - utilized_amount (numeric) — only meaningful for credit_card type
+   - is_default (boolean)
+
+3. filtered_budgets
+   - category_id (integer)
+   - amount (numeric) — monthly budget amount for the category
+   - currency (text)
+   - is_active (boolean)
+   - Use all_categories to resolve names: JOIN all_categories ON all_categories.id = filtered_budgets.category_id
+
+4. filtered_goals
+   - name (text)
+   - target_amount (numeric)
+   - current_amount (numeric)
+   - deadline (date, nullable)
+   - is_completed (boolean)
+   - currency (text)
+
+5. all_categories
+   - id (integer)
+   - name (text)
+   - Use ONLY to resolve category names for filtered_budgets. Do NOT use for filtering filtered_expenses.
+
+Rules:
+- Return ONLY a valid PostgreSQL SELECT query. No explanation. No markdown. No code fences. No semicolon at end.
+- Use only the table names listed above. Never reference raw tables like expenses, financial_accounts, budgets, savings_goals, profiles, etc.
+- filtered_expenses already has category_name and subcategory_name — do NOT join categories for expenses.
+- Do not add any LIMIT clause unless the user explicitly asks for a specific number of results.
+- If the question cannot be answered from these tables (e.g. general advice, weather, etc.), return exactly: NOT_SQL
+`.trim();
+
+// ---------------------------------------------------------------------------
+// Tables that must never appear in GPT-generated SQL
+// ---------------------------------------------------------------------------
+const BLOCKED_TABLE_PATTERNS = [
+  'expenses',
+  'financial_accounts',
+  'budgets',
+  'savings_goals',
+  'profiles',
+  'auth\\.users',
+  'information_schema',
+  'pg_catalog',
+  'pg_',
+];
+
+const DANGEROUS_KEYWORDS = [
+  'INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER',
+  'TRUNCATE', 'GRANT', 'REVOKE', 'EXECUTE', 'EXEC', 'COPY',
+  'VACUUM', 'ANALYZE', 'IMPORT', 'LOAD', 'RESET',
+];
+
+// ---------------------------------------------------------------------------
+// Main handler
+// ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -44,10 +154,7 @@ Deno.serve(async (req) => {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) {
-    return json(
-      { error: authError?.message || 'Unauthorized user.' },
-      401,
-    );
+    return json({ error: authError?.message || 'Unauthorized user.' }, 401);
   }
 
   const body = await parseBody(req);
@@ -67,6 +174,7 @@ Deno.serve(async (req) => {
 
   const profile = profileResult.data;
   const planTier = resolvePlanTier(profile?.plan_tier, profile?.is_premium);
+
   if (planTier === 'free') {
     return json(
       {
@@ -78,9 +186,7 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date();
-  const { dayStartIso, dayEndIso } = resolveDayRangeUtc(
-    body?.tz_offset_minutes,
-  );
+  const { dayStartIso, dayEndIso } = resolveDayRangeUtc(body?.tz_offset_minutes);
   const retentionStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1),
   );
@@ -104,34 +210,36 @@ Deno.serve(async (req) => {
     planTier === 'premium' ? PREMIUM_DAILY_LIMIT : PREMIUM_PLUS_DAILY_LIMIT;
 
   if (dailyUsed >= dailyLimit) {
-    return json(
-      { error: 'Daily Moneii AI limit reached for your plan.' },
-      429,
-    );
+    return json({ error: 'Daily Moneii AI limit reached for your plan.' }, 429);
   }
 
   let requestId: number | null = null;
   const insertResult = await supabase
     .from('ai_assistant_requests')
-    .insert({
-      user_id: user.id,
-      prompt,
-      status: 'started',
-    })
+    .insert({ user_id: user.id, prompt, status: 'started' })
     .select('id')
     .single();
 
   requestId = insertResult.data?.id ?? null;
 
   try {
-    const contextDays = planTier === 'premium_plus' ? 365 : 90;
-    const contextRowLimit = planTier === 'premium_plus' ? 1500 : 300;
-    const context = await buildUserContext(supabase, user.id, {
-      currencyPreference: profile?.currency_preference ?? 'USD',
-      daysBack: contextDays,
-      maxTransactions: contextRowLimit,
-    });
-    const answer = await askModel(prompt, context);
+    const daysBack = planTier === 'premium_plus' ? 365 : 90;
+    const today = now.toISOString().slice(0, 10);
+    const dateFrom = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const currencyPreference = profile?.currency_preference ?? 'USD';
+
+    const answer = await answerWithSqlOrFallback(
+      supabase,
+      user.id,
+      prompt,
+      today,
+      dateFrom,
+      daysBack,
+      currencyPreference,
+      planTier,
+    );
 
     if (requestId != null) {
       await supabase
@@ -165,6 +273,284 @@ Deno.serve(async (req) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Text-to-SQL pipeline with fallback to context stuffing
+// ---------------------------------------------------------------------------
+async function answerWithSqlOrFallback(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  prompt: string,
+  today: string,
+  dateFrom: string,
+  daysBack: number,
+  currencyPreference: string,
+  planTier: PlanTier,
+): Promise<string> {
+  try {
+    // Step 1: Ask GPT to generate a SQL query for this prompt.
+    const rawSql = await generateSql(prompt, today, currencyPreference);
+    // Strip trailing semicolons GPT sometimes appends.
+    const cleanSql = rawSql.trim().replace(/;+$/, '');
+    console.log('[moneii-ai] clean SQL:', cleanSql);
+
+    // Step 2: GPT signals the question can't be answered from DB data.
+    if (cleanSql === 'NOT_SQL') {
+      console.log('[moneii-ai] NOT_SQL — falling back');
+      throw new Error('NOT_SQL');
+    }
+
+    // Step 3: Validate the SQL for safety before touching the DB.
+    const validation = validateSql(cleanSql);
+    if (!validation.valid) {
+      console.log('[moneii-ai] validation failed:', validation.error);
+      throw new Error(`SQL validation: ${validation.error}`);
+    }
+
+    // Step 4: Wrap in user-scoped CTEs (enforces user_id + date range).
+    const securedSql = buildSecuredQuery(cleanSql, userId, dateFrom);
+
+    // Step 5: Execute against the database.
+    const rows = await executeAiQuery(supabase, securedSql);
+    console.log('[moneii-ai] query returned', rows.length, 'rows:', JSON.stringify(rows));
+
+    // Step 6: Ask GPT to turn the raw rows into a natural language answer.
+    return await generateAnswerFromRows(prompt, rows, today, currencyPreference);
+  } catch (err) {
+    console.log('[moneii-ai] error, using fallback:', err instanceof Error ? err.message : err);
+    // On any failure (bad SQL, DB error, GPT error, NOT_SQL) fall back to
+    // the original context-stuffing approach so the user always gets an answer.
+    const context = await buildUserContext(supabase, userId, {
+      currencyPreference,
+      daysBack,
+      maxTransactions: planTier === 'premium_plus' ? 1500 : 300,
+    });
+    return await askModel(prompt, context);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: Generate SQL from the user's prompt
+// ---------------------------------------------------------------------------
+async function generateSql(
+  prompt: string,
+  today: string,
+  currencyPreference: string,
+): Promise<string> {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0,
+      max_tokens: 400,
+      messages: [
+        {
+          role: 'system',
+          content:
+            `You are a PostgreSQL query generator for a personal finance app.\n` +
+            `Today is ${today}. User preferred currency: ${currencyPreference}.\n\n` +
+            SCHEMA_DESCRIPTION,
+        },
+        { role: 'user', content: prompt },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('SQL generation request failed');
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+
+  const raw = data.choices?.[0]?.message?.content?.trim() ?? '';
+
+  // Strip markdown code fences if GPT wraps the query in them.
+  return raw
+    .replace(/^```sql\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Validate the raw SQL for safety
+// ---------------------------------------------------------------------------
+function validateSql(sql: string): { valid: boolean; error?: string } {
+  const trimmed = sql.trim();
+  const upper = trimmed.toUpperCase();
+
+  if (!upper.startsWith('SELECT')) {
+    return { valid: false, error: 'Query must start with SELECT' };
+  }
+
+  // No multiple statements.
+  if (trimmed.includes(';')) {
+    return { valid: false, error: 'Semicolons are not allowed' };
+  }
+
+  // No dangerous DML / DDL keywords.
+  for (const keyword of DANGEROUS_KEYWORDS) {
+    if (new RegExp(`\\b${keyword}\\b`).test(upper)) {
+      return { valid: false, error: `Disallowed keyword: ${keyword}` };
+    }
+  }
+
+  // GPT must not reference raw protected tables directly.
+  for (const pattern of BLOCKED_TABLE_PATTERNS) {
+    if (new RegExp(`\\b${pattern}\\b`, 'i').test(trimmed)) {
+      return { valid: false, error: `Direct table access not allowed: ${pattern}` };
+    }
+  }
+
+  return { valid: true };
+}
+
+// ---------------------------------------------------------------------------
+// Step 4: Wrap GPT's SELECT in user-scoped CTEs
+// This is the primary security layer — user_id and date range are enforced
+// here in TypeScript, not trusted to GPT.
+// ---------------------------------------------------------------------------
+function buildSecuredQuery(sql: string, userId: string, dateFrom: string): string {
+  // Sanity-check both values (they come from our own code, but be explicit).
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+    throw new Error('Invalid userId format');
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) {
+    throw new Error('Invalid dateFrom format');
+  }
+
+  return `
+WITH
+  filtered_expenses AS (
+    SELECT
+      e.amount,
+      e.currency,
+      e.transaction_type,
+      e.payment_source,
+      e.description,
+      e.expense_date,
+      COALESCE(cat.name, 'Other') AS category_name,
+      sub.name AS subcategory_name
+    FROM expenses e
+    LEFT JOIN categories cat ON cat.id = e.category_id
+    LEFT JOIN categories sub ON sub.id = e.subcategory_id
+    WHERE e.user_id = '${userId}'
+      AND e.expense_date >= '${dateFrom}'
+  ),
+  filtered_accounts AS (
+    SELECT
+      name,
+      account_type,
+      current_balance,
+      credit_limit,
+      utilized_amount,
+      is_default
+    FROM financial_accounts
+    WHERE user_id = '${userId}'
+  ),
+  filtered_budgets AS (
+    SELECT
+      category_id,
+      amount,
+      currency,
+      is_active
+    FROM budgets
+    WHERE user_id = '${userId}'
+  ),
+  filtered_goals AS (
+    SELECT
+      name,
+      target_amount,
+      current_amount,
+      deadline,
+      is_completed,
+      currency
+    FROM savings_goals
+    WHERE user_id = '${userId}'
+  ),
+  all_categories AS (
+    SELECT id, name FROM categories
+  )
+${sql}`.trim();
+}
+
+// ---------------------------------------------------------------------------
+// Step 5: Execute the secured query via the run_ai_select DB function
+// ---------------------------------------------------------------------------
+async function executeAiQuery(
+  supabase: ReturnType<typeof createClient>,
+  sql: string,
+): Promise<Record<string, unknown>[]> {
+  const { data, error } = await supabase.rpc('run_ai_select', { query_sql: sql });
+  if (error) throw new Error(`Query execution failed: ${error.message}`);
+  if (!Array.isArray(data)) return [];
+  return data as Record<string, unknown>[];
+}
+
+// ---------------------------------------------------------------------------
+// Step 7: Turn raw query rows into a natural language answer
+// ---------------------------------------------------------------------------
+async function generateAnswerFromRows(
+  prompt: string,
+  rows: Record<string, unknown>[],
+  today: string,
+  currencyPreference: string,
+): Promise<string> {
+  const systemPrompt =
+    'You are Moneii AI, a personal finance assistant. ' +
+    `Today is ${today}. User preferred currency: ${currencyPreference}. ` +
+    'Answer the user question using ONLY the provided query results. ' +
+    'If results are empty, say no matching data was found — never invent numbers. ' +
+    'Answer naturally in plain text. ' +
+    'Do not use markdown symbols like **, #, or bullet markdown. ' +
+    'Keep answers concise and never exceed 200 words.';
+
+  const resultText =
+    rows.length === 0
+      ? 'No results found.'
+      : `Query returned ${rows.length} row(s):\n${JSON.stringify(rows)}`;
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      max_tokens: 350,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: `User question: ${prompt}\n\nQuery results:\n${resultText}`,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Answer generation failed');
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = data.choices?.[0]?.message?.content?.trim();
+  if (!content) throw new Error('Empty answer from model');
+
+  return enforceMaxWords(content, 200);
+}
+
+// ---------------------------------------------------------------------------
+// Fallback: original context-stuffing approach (used when SQL path fails)
+// ---------------------------------------------------------------------------
 async function buildUserContext(
   supabase: ReturnType<typeof createClient>,
   userId: string,
@@ -174,7 +560,6 @@ async function buildUserContext(
   const fromDate = new Date(now);
   fromDate.setUTCDate(now.getUTCDate() - options.daysBack);
 
-  // Current month boundaries in UTC
   const currentMonthStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   );
@@ -217,13 +602,16 @@ async function buildUserContext(
   }
 
   type Totals = { expense: number; income: number; transfer: number; credit_card_payment: number };
-  const emptyTotals = (): Totals => ({ expense: 0, income: 0, transfer: 0, credit_card_payment: 0 });
+  const emptyTotals = (): Totals => ({
+    expense: 0,
+    income: 0,
+    transfer: 0,
+    credit_card_payment: 0,
+  });
 
-  // Separate current month from historical
   const currentMonthTotals = emptyTotals();
   const currentMonthCategorySpend = new Map<string, number>();
   const currentMonthTransactions: object[] = [];
-
   const monthlyMap = new Map<string, Totals>();
 
   for (const entry of expenses) {
@@ -251,7 +639,6 @@ async function buildUserContext(
         });
       }
     } else {
-      // Group by YYYY-MM for historical summary
       const monthKey = entry.expense_date.slice(0, 7);
       if (!monthlyMap.has(monthKey)) monthlyMap.set(monthKey, emptyTotals());
       const m = monthlyMap.get(monthKey)!;
@@ -269,7 +656,10 @@ async function buildUserContext(
     .slice(0, 6)
     .map(([month, totals]) => ({ month, ...totals }));
 
-  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
   const currentMonthLabel = `${monthNames[now.getUTCMonth()]} ${now.getUTCFullYear()}`;
 
   return {
@@ -372,10 +762,10 @@ async function askModel(prompt: string, userContext: unknown): Promise<string> {
   return enforceMaxWords(rewritten, 200);
 }
 
-function resolvePlanTier(
-  planTierRaw: unknown,
-  isPremiumRaw: unknown,
-): PlanTier {
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+function resolvePlanTier(planTierRaw: unknown, isPremiumRaw: unknown): PlanTier {
   if (planTierRaw === 'premium_plus') return 'premium_plus';
   if (planTierRaw === 'premium') return 'premium';
   if (planTierRaw === 'free') return 'free';
@@ -389,10 +779,7 @@ async function parseBody(req: Request): Promise<{
   try {
     const body = await req.json();
     if (!body || typeof body !== 'object') return null;
-    return body as {
-      prompt?: string;
-      tz_offset_minutes?: number | string;
-    };
+    return body as { prompt?: string; tz_offset_minutes?: number | string };
   } catch (_) {
     return null;
   }
@@ -437,12 +824,11 @@ function json(data: unknown, status = 200) {
 }
 
 function countWords(text: string): number {
-  const words = text.trim().split(/\s+/).filter((word) => word.length > 0);
-  return words.length;
+  return text.trim().split(/\s+/).filter((w) => w.length > 0).length;
 }
 
 function enforceMaxWords(text: string, maxWords: number): string {
-  const words = text.trim().split(/\s+/).filter((word) => word.length > 0);
+  const words = text.trim().split(/\s+/).filter((w) => w.length > 0);
   if (words.length <= maxWords) return text.trim();
   return `${words.slice(0, maxWords).join(' ').trim()}.`;
 }

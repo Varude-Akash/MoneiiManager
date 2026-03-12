@@ -19,6 +19,7 @@ import 'package:moneii_manager/features/net_worth/presentation/screens/net_worth
 import 'package:moneii_manager/features/goals/presentation/screens/goals_screen.dart';
 import 'package:moneii_manager/features/health_score/presentation/screens/health_score_screen.dart';
 import 'package:moneii_manager/features/wrapped/presentation/screens/wrapped_screen.dart';
+import 'package:moneii_manager/features/ai_hub/presentation/screens/ai_hub_screen.dart';
 import 'package:moneii_manager/shared/widgets/app_scaffold.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -96,6 +97,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                     state.uri.queryParameters['openAddAccount'] == '1',
               ),
             ),
+          ),
+          GoRoute(
+            path: '/ai',
+            pageBuilder: (context, state) =>
+                _buildPage(state: state, child: const AiHubScreen()),
           ),
           GoRoute(
             path: '/moneii-ai',

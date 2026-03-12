@@ -164,7 +164,7 @@ class MoneiiAiRemoteDatasource {
           throw Exception(message);
         }
       }
-      throw Exception('Moneii AI request failed. Please try again.');
+      throw Exception('Zora request failed. Please try again.');
     }
 
     return _parseResponse(response.data ?? <String, dynamic>{});
@@ -174,7 +174,7 @@ class MoneiiAiRemoteDatasource {
     final answer = (data['answer'] as String?)?.trim();
     final usage = data['usage'] as Map<String, dynamic>? ?? <String, dynamic>{};
     if (answer == null || answer.isEmpty) {
-      throw Exception('Moneii AI returned an empty response. Please retry.');
+      throw Exception('Zora returned an empty response. Please retry.');
     }
 
     return MoneiiAiResponse(

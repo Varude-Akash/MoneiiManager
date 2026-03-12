@@ -3,7 +3,8 @@
     "allow": [
       "Bash(flutter --version:*)",
       "Bash(flutter create:*)",
-      "Bash(flutter analyze --no-fatal-infos)"
+      "Bash(flutter analyze --no-fatal-infos)",
+      "Bash(flutter analyze lib/features/ai_hub/presentation/screens/ai_hub_screen.dart)"
     ]
   }
 }

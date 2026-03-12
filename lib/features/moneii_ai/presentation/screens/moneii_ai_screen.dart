@@ -20,6 +20,18 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
   final _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
@@ -73,7 +85,7 @@ class _MoneiiAiScreenState extends ConsumerState<MoneiiAiScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Moneii AI')),
+      appBar: AppBar(title: const Text('Zora')),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
         child: SafeArea(
@@ -365,7 +377,7 @@ class _LockedMoneiiAi extends StatelessWidget {
             const Icon(Icons.lock_rounded, size: 32, color: AppColors.primary),
             const SizedBox(height: 10),
             const Text(
-              'Moneii AI is available on Premium plans.',
+              'Zora is available on Premium plans.',
               style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 16,
