@@ -43,7 +43,8 @@ class WhisperRemoteDatasource {
           );
         }
         try {
-          response = await _callTranscribe(refreshedToken, multipartFile);
+          final retryFile = await _buildMultipartAudio(filePath);
+          response = await _callTranscribe(refreshedToken, retryFile);
         } on dio.DioException {
           throw Exception(
             'Your session expired. Please sign out and sign in again.',

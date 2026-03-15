@@ -82,11 +82,14 @@ class _AiBudgetSuggestionsSheetState
     try {
       final profile = ref.read(profileProvider).valueOrNull;
       final currency = profile?.currencyPreference ?? 'USD';
+      final client = ref.read(supabaseClientProvider);
+      final accessToken = client.auth.currentSession?.accessToken ?? '';
       final service = AiBudgetService();
       final suggestions = await service.getSuggestions(
         categoryAverages: widget.categoryAverages,
         monthlyIncomeAverage: widget.monthlyIncomeAvg,
         currency: currency,
+        accessToken: accessToken,
       );
       if (mounted) {
         setState(() {
