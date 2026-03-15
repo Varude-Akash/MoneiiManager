@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
 import 'package:moneii_manager/features/net_worth/presentation/providers/net_worth_provider.dart';
+import 'package:moneii_manager/features/subscriptions/presentation/providers/revenuecat_provider.dart';
 
 class NetWorthSummaryCard extends ConsumerWidget {
   const NetWorthSummaryCard({super.key});
@@ -14,13 +15,18 @@ class NetWorthSummaryCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(netWorthProvider);
     final profile = ref.watch(profileProvider).valueOrNull;
+    final purchases = ref.watch(revenueCatProvider);
+    final milestone = ref.watch(netWorthMilestoneProvider);
+
     final currency = profile?.currencyPreference ?? 'USD';
-    final fmt = NumberFormat.currency(
-      symbol: NumberFormat.currency(name: currency).currencySymbol,
-      decimalDigits: 0,
-    );
+    final currencySymbol = NumberFormat.currency(name: currency).currencySymbol;
+    final fmt = NumberFormat.currency(symbol: currencySymbol, decimalDigits: 0);
 
     final isPositive = summary.netWorth >= 0;
+    final isPro = profile?.planTier == 'premium' ||
+        profile?.planTier == 'premium_plus' ||
+        purchases.hasMoneiiPro ||
+        purchases.hasMoneiiProPlus;
 
     return GestureDetector(
       onTap: () => context.push('/net-worth'),
@@ -88,9 +94,93 @@ class NetWorthSummaryCard extends ConsumerWidget {
                 ),
               ],
             ),
+
+            // Milestone progress bar (Pro only)
+            if (isPro && milestone != null) ...[
+              const SizedBox(height: 14),
+              _MilestoneProgressBar(
+                milestone: milestone,
+                currencySymbol: currencySymbol,
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MilestoneProgressBar extends StatelessWidget {
+  const _MilestoneProgressBar({
+    required this.milestone,
+    required this.currencySymbol,
+  });
+
+  final NetWorthMilestoneData milestone;
+  final String currencySymbol;
+
+  String _format(double value) {
+    if (value >= 1000000) {
+      return '$currencySymbol${(value / 1000000).toStringAsFixed(value % 1000000 == 0 ? 0 : 1)}M';
+    }
+    if (value >= 1000) {
+      return '$currencySymbol${(value / 1000).toStringAsFixed(0)}K';
+    }
+    return '$currencySymbol${value.toStringAsFixed(0)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Text('🎯 ', style: TextStyle(fontSize: 12)),
+                Text(
+                  'Next milestone: ${_format(milestone.nextMilestone)}',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              '${(milestone.progress * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: milestone.progress,
+            minHeight: 6,
+            backgroundColor: AppColors.glassBorder,
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+          ),
+        ),
+        if (milestone.monthsToNext != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            'At your pace, ~${milestone.monthsToNext!.toStringAsFixed(0)} months away',
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

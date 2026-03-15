@@ -1,14 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:moneii_manager/config/theme.dart';
+import 'package:moneii_manager/core/services/notification_service.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
+import 'package:moneii_manager/features/net_worth/presentation/providers/net_worth_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class AppScaffold extends ConsumerWidget {
+class AppScaffold extends ConsumerStatefulWidget {
   final Widget child;
 
   const AppScaffold({super.key, required this.child});
+
+  @override
+  ConsumerState<AppScaffold> createState() => _AppScaffoldState();
+}
+
+class _AppScaffoldState extends ConsumerState<AppScaffold> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.requestPermission();
+    });
+  }
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
@@ -19,17 +36,31 @@ class AppScaffold extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final currentIndex = _currentIndex(context);
     final profile = ref.watch(profileProvider).valueOrNull;
     final topPadding = MediaQuery.of(context).padding.top;
     final location = GoRouterState.of(context).matchedLocation;
     final showProfileButton = location != '/profile';
 
+    // Watch net worth and fire milestone notification when it crosses a threshold
+    ref.listen<NetWorthSummary>(netWorthProvider, (previous, next) async {
+      if (previous == null) return;
+      final currencySymbol = profile != null
+          ? _currencySymbol(profile.currencyPreference ?? 'USD')
+          : '\$';
+      final prefs = await SharedPreferences.getInstance();
+      await NotificationService.checkAndNotifyMilestone(
+        next.netWorth,
+        currencySymbol,
+        prefs,
+      );
+    });
+
     return Scaffold(
       body: Stack(
         children: [
-          child,
+          widget.child,
           if (showProfileButton)
           Positioned(
             top: topPadding + 8,
@@ -123,5 +154,13 @@ class AppScaffold extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _currencySymbol(String currencyCode) {
+    try {
+      return NumberFormat.currency(name: currencyCode).currencySymbol;
+    } catch (_) {
+      return currencyCode;
+    }
   }
 }

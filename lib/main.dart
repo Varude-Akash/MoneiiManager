@@ -7,10 +7,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:moneii_manager/app.dart';
 import 'package:moneii_manager/config/env.dart';
+import 'package:moneii_manager/core/services/notification_service.dart';
 import 'package:moneii_manager/features/onboarding/presentation/providers/onboarding_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await NotificationService.init();
+  } catch (_) {}
 
   // Ads are currently configured only for Android in this project.
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {

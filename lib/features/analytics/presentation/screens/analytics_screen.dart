@@ -18,7 +18,10 @@ import 'package:moneii_manager/features/expenses/domain/entities/expense.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/category_provider.dart';
 import 'package:moneii_manager/features/expenses/presentation/providers/expense_provider.dart';
 import 'package:moneii_manager/features/goals/presentation/providers/goals_provider.dart';
-import 'package:moneii_manager/features/health_score/presentation/widgets/health_score_card.dart';
+import 'package:moneii_manager/features/health_score/presentation/providers/health_score_provider.dart';
+import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
+import 'package:moneii_manager/features/net_worth/presentation/providers/net_worth_provider.dart';
+import 'package:moneii_manager/features/subscriptions/presentation/providers/revenuecat_provider.dart';
 import 'package:moneii_manager/features/wrapped/presentation/providers/wrapped_provider.dart';
 import 'package:moneii_manager/shared/widgets/glass_card.dart';
 import 'package:moneii_manager/shared/widgets/shimmer_skeleton.dart';
@@ -67,8 +70,10 @@ class AnalyticsScreen extends ConsumerWidget {
             },
           ),
           const SizedBox(height: 10),
-          const HealthScoreCard(),
-          const SizedBox(height: 8),
+          const _HealthScoreStatusRow(),
+          const SizedBox(height: 10),
+          const _ZoraInsightsStrip(),
+          const SizedBox(height: 10),
           _BudgetsSection(selectedMonth: summary.selectedMonth),
           const SizedBox(height: 8),
           const _GoalsSummarySection(),
@@ -138,7 +143,7 @@ class _ModeToggle extends StatelessWidget {
   }
 }
 
-class _MonthSelector extends StatefulWidget {
+class _MonthSelector extends StatelessWidget {
   const _MonthSelector({
     required this.selectedMonth,
     required this.earliestMonth,
@@ -150,176 +155,173 @@ class _MonthSelector extends StatefulWidget {
   final ValueChanged<DateTime> onMonthSelected;
 
   @override
-  State<_MonthSelector> createState() => _MonthSelectorState();
-}
-
-class _MonthSelectorState extends State<_MonthSelector> {
-  late final ScrollController _controller;
-  var _canScrollLeft = false;
-  var _canScrollRight = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = ScrollController()..addListener(_syncIndicators);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncIndicators());
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_syncIndicators);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _syncIndicators() {
-    if (!_controller.hasClients) return;
-    final max = _controller.position.maxScrollExtent;
-    final offset = _controller.offset;
-    final nextLeft = offset > 4;
-    final nextRight = offset < max - 4;
-    if (nextLeft != _canScrollLeft || nextRight != _canScrollRight) {
-      setState(() {
-        _canScrollLeft = nextLeft;
-        _canScrollRight = nextRight;
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final monthCount =
-        ((now.year - widget.earliestMonth.year) * 12) +
-        (now.month - widget.earliestMonth.month) +
-        1;
-    final safeCount = monthCount.clamp(1, 600);
-    final months = List.generate(
-      safeCount,
-      (index) => DateTime(now.year, now.month - index),
-    );
+    final currentMonth = DateTime(now.year, now.month);
+    final canGoPrev = selectedMonth.year > earliestMonth.year ||
+        (selectedMonth.year == earliestMonth.year &&
+            selectedMonth.month > earliestMonth.month);
+    final canGoNext = selectedMonth.isBefore(currentMonth);
 
-    return SizedBox(
-      height: 36,
-      child: Row(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ListView.separated(
-                  controller: _controller,
-                  scrollDirection: Axis.horizontal,
-                  itemCount: months.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final month = months[index];
-                    final selected =
-                        month.year == widget.selectedMonth.year &&
-                        month.month == widget.selectedMonth.month;
-                    return ChoiceChip(
-                      label: Text(
-                        AppDateUtils.formatMonth(month),
-                        style: const TextStyle(fontSize: 11.5),
-                      ),
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
-                      visualDensity: const VisualDensity(
-                        horizontal: -2,
-                        vertical: -2,
-                      ),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      selected: selected,
-                      onSelected: (_) => widget.onMonthSelected(
-                        DateTime(month.year, month.month),
-                      ),
-                    );
-                  },
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        IconButton(
+          onPressed: canGoPrev
+              ? () => onMonthSelected(
+                    DateTime(selectedMonth.year, selectedMonth.month - 1),
+                  )
+              : null,
+          icon: const Icon(Icons.chevron_left_rounded),
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        ),
+        GestureDetector(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: selectedMonth,
+              firstDate: earliestMonth,
+              lastDate: DateTime(now.year, now.month, now.day),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.dark(
+                      primary: AppColors.primary,
+                      surface: AppColors.surface,
+                    ),
+                  ),
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
+            );
+            if (picked != null) {
+              onMonthSelected(DateTime(picked.year, picked.month));
+            }
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                AppDateUtils.formatMonth(selectedMonth),
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
                 ),
-                if (_canScrollLeft)
-                  const Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: _ScrollEdgeIndicator(
-                      alignment: Alignment.centerLeft,
-                      icon: Icons.chevron_left_rounded,
-                    ),
-                  ),
-                if (_canScrollRight)
-                  const Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: _ScrollEdgeIndicator(
-                      alignment: Alignment.centerRight,
-                      icon: Icons.chevron_right_rounded,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Jump to month',
-            visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            onPressed: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: widget.selectedMonth,
-                firstDate: widget.earliestMonth,
-                lastDate: DateTime(now.year, now.month, now.day),
-                builder: (context, child) {
-                  return Theme(
-                    data: Theme.of(context).copyWith(
-                      colorScheme: const ColorScheme.dark(
-                        primary: AppColors.primary,
-                        surface: AppColors.surface,
-                      ),
-                    ),
-                    child: child ?? const SizedBox.shrink(),
-                  );
-                },
-              );
-              if (picked != null) {
-                widget.onMonthSelected(DateTime(picked.year, picked.month));
-              }
-            },
-            icon: const Icon(Icons.calendar_month_rounded),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScrollEdgeIndicator extends StatelessWidget {
-  const _ScrollEdgeIndicator({required this.alignment, required this.icon});
-
-  final Alignment alignment;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: 26,
-        alignment: alignment,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: alignment == Alignment.centerLeft
-                ? Alignment.centerLeft
-                : Alignment.centerRight,
-            end: alignment == Alignment.centerLeft
-                ? Alignment.centerRight
-                : Alignment.centerLeft,
-            colors: [
-              AppColors.background.withValues(alpha: 0.95),
-              AppColors.background.withValues(alpha: 0),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.calendar_month_rounded,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
             ],
           ),
         ),
-        child: Icon(icon, size: 18, color: AppColors.textMuted),
+        IconButton(
+          onPressed: canGoNext
+              ? () => onMonthSelected(
+                    DateTime(selectedMonth.year, selectedMonth.month + 1),
+                  )
+              : null,
+          icon: const Icon(Icons.chevron_right_rounded),
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        ),
+      ],
+    );
+  }
+}
+
+class _HealthScoreStatusRow extends ConsumerWidget {
+  const _HealthScoreStatusRow();
+
+  static String _tierLabel(int score) {
+    if (score >= 85) return 'Excellent';
+    if (score >= 70) return 'Good';
+    if (score >= 50) return 'Fair';
+    if (score >= 30) return 'Needs Work';
+    return 'Critical';
+  }
+
+  static Color _tierColor(int score) {
+    if (score >= 85) return AppColors.accentGreen;
+    if (score >= 70) return const Color(0xFF34D399);
+    if (score >= 50) return AppColors.accentOrange;
+    if (score >= 30) return const Color(0xFFF97316);
+    return AppColors.error;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scoreAsync = ref.watch(healthScoreProvider);
+    final historyAsync = ref.watch(healthScoreHistoryProvider);
+    final score = scoreAsync.valueOrNull;
+    if (score == null) return const SizedBox.shrink();
+
+    final history = historyAsync.valueOrNull ?? [];
+    int? delta;
+    if (history.length >= 2) {
+      delta = history[0].totalScore - history[1].totalScore;
+    }
+
+    final tier = _tierLabel(score.totalScore);
+    final color = _tierColor(score.totalScore);
+
+    return InkWell(
+      onTap: () => context.push('/health-score'),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Icon(Iconsax.activity, size: 14, color: color),
+            const SizedBox(width: 6),
+            const Text(
+              'Financial Health',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                tier,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '${score.totalScore}',
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (delta != null) ...[
+              const SizedBox(width: 4),
+              Text(
+                '${delta >= 0 ? '+' : ''}$delta',
+                style: TextStyle(
+                  color: delta >= 0 ? AppColors.accentGreen : AppColors.error,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -1836,6 +1838,158 @@ class _WrappedBanner extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ─── Zora Insights Strip ─────────────────────────────────────────────────────
+
+class _ZoraInsightsStrip extends ConsumerWidget {
+  const _ZoraInsightsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final purchases = ref.watch(revenueCatProvider);
+    final profile = ref.watch(profileProvider).valueOrNull;
+    final milestone = ref.watch(netWorthMilestoneProvider);
+    final idleCash = ref.watch(idleCashAlertProvider);
+    final isPro = profile?.planTier == 'premium' ||
+        profile?.planTier == 'premium_plus' ||
+        purchases.hasMoneiiPro ||
+        purchases.hasMoneiiProPlus;
+    final isProPlus = profile?.planTier == 'premium_plus' ||
+        purchases.hasMoneiiProPlus;
+
+    final currency = profile?.currencyPreference ?? 'USD';
+    final currencySymbol =
+        NumberFormat.currency(name: currency).currencySymbol;
+
+    final cards = <Widget>[];
+
+    // Net worth teaser (always visible — drives discovery)
+    cards.add(_InsightCard(
+      emoji: '💎',
+      title: 'Net Worth',
+      subtitle: 'Track your wealth',
+      color: AppColors.primary,
+      onTap: () => context.push('/net-worth'),
+    ));
+
+    // Milestone card (Pro)
+    if (isPro && milestone != null) {
+      final pct = (milestone.progress * 100).toStringAsFixed(0);
+      final next = _fmtShort(milestone.nextMilestone, currencySymbol);
+      cards.add(_InsightCard(
+        emoji: '🎯',
+        title: '$pct% to $next',
+        subtitle: milestone.monthsToNext != null
+            ? '~${milestone.monthsToNext!.toStringAsFixed(0)} months away'
+            : 'Keep growing!',
+        color: const Color(0xFF7C3AED),
+        onTap: () => context.push('/net-worth'),
+      ));
+    }
+
+    // Idle cash card (Pro+)
+    if (isProPlus && idleCash != null) {
+      final idle = _fmtShort(idleCash.idleAmount, currencySymbol);
+      final erosion = _fmtShort(idleCash.monthlyErosion, currencySymbol);
+      cards.add(_InsightCard(
+        emoji: '💸',
+        title: '$idle idle',
+        subtitle: 'Losing $erosion/mo to inflation',
+        color: AppColors.warning,
+        onTap: () => context.push('/net-worth'),
+      ));
+    }
+
+    if (cards.isEmpty) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 80,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        itemCount: cards.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) => cards[i],
+      ),
+    );
+  }
+
+  String _fmtShort(double value, String symbol) {
+    if (value >= 1000000) {
+      return '$symbol${(value / 1000000).toStringAsFixed(1)}M';
+    }
+    if (value >= 1000) {
+      return '$symbol${(value / 1000).toStringAsFixed(0)}K';
+    }
+    return '$symbol${value.toStringAsFixed(0)}';
+  }
+}
+
+class _InsightCard extends StatelessWidget {
+  const _InsightCard({
+    required this.emoji,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String emoji;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 160,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 11,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

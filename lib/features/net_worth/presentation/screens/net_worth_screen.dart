@@ -7,6 +7,7 @@ import 'package:moneii_manager/config/theme.dart';
 import 'package:moneii_manager/features/auth/presentation/providers/auth_provider.dart';
 import 'package:moneii_manager/features/net_worth/presentation/providers/net_worth_provider.dart';
 import 'package:moneii_manager/features/profile/presentation/providers/financial_account_provider.dart';
+import 'package:moneii_manager/features/subscriptions/presentation/providers/revenuecat_provider.dart';
 
 class NetWorthScreen extends ConsumerWidget {
   const NetWorthScreen({super.key});
@@ -17,9 +18,7 @@ class NetWorthScreen extends ConsumerWidget {
     final accountsAsync = ref.watch(financialAccountsProvider);
     final historyAsync = ref.watch(netWorthHistoryProvider);
 
-    // Save snapshot on first build (best-effort, fire and forget)
     ref.listen(saveNetWorthSnapshotProvider, (_, __) {});
-    // Trigger the provider
     ref.read(saveNetWorthSnapshotProvider);
 
     final profile = ref.watch(profileProvider).valueOrNull;
@@ -28,6 +27,14 @@ class NetWorthScreen extends ConsumerWidget {
       symbol: NumberFormat.currency(name: currency).currencySymbol,
       decimalDigits: 0,
     );
+
+    final purchases = ref.watch(revenueCatProvider);
+    final isPro = profile?.planTier == 'premium' ||
+        profile?.planTier == 'premium_plus' ||
+        purchases.hasMoneiiPro ||
+        purchases.hasMoneiiProPlus;
+    final isProPlus = profile?.planTier == 'premium_plus' ||
+        purchases.hasMoneiiProPlus;
 
     final accounts = accountsAsync.valueOrNull ?? [];
     final assetAccounts = accounts
@@ -43,6 +50,11 @@ class NetWorthScreen extends ConsumerWidget {
       delta = history[0].netWorth - history[1].netWorth;
     }
 
+    final milestone = ref.watch(netWorthMilestoneProvider);
+    final idleAlert = ref.watch(idleCashAlertProvider);
+    final idleDismissed = ref.watch(idleCashDismissedProvider);
+    final projection = isProPlus ? ref.watch(netWorthProjectionProvider) : null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -55,15 +67,20 @@ class NetWorthScreen extends ConsumerWidget {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Large net worth number
                 _NetWorthHeader(
                   summary: summary,
                   delta: delta,
                   fmt: fmt,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-                // Assets section
+                // ── Milestone card (Pro) ───────────────────────────────────
+                if (isPro && milestone != null) ...[
+                  _MilestoneCard(milestone: milestone, fmt: fmt),
+                  const SizedBox(height: 16),
+                ],
+
+                // ── Assets section ────────────────────────────────────────
                 if (assetAccounts.isNotEmpty) ...[
                   _SectionHeader(
                     title: 'Assets',
@@ -82,7 +99,7 @@ class NetWorthScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                 ],
 
-                // Liabilities section
+                // ── Liabilities section ───────────────────────────────────
                 if (liabilityAccounts.isNotEmpty) ...[
                   _SectionHeader(
                     title: 'Liabilities',
@@ -102,25 +119,55 @@ class NetWorthScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                 ],
 
-                // Chart
+                // ── Chart ─────────────────────────────────────────────────
                 if (history.length >= 2) ...[
                   const Divider(color: AppColors.surfaceLight),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Net Worth Over Time',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      const Text(
+                        'Net Worth Over Time',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (isProPlus && projection != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Projected',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 12),
                   _NetWorthChart(
-                    history: history.reversed
-                        .take(6)
-                        .toList(),
+                    history: history.reversed.take(6).toList(),
+                    projection: projection?.projectedPoints,
                   ),
                   const SizedBox(height: 16),
+                ],
+
+                // ── Idle cash alert (Pro+) ────────────────────────────────
+                if (isProPlus &&
+                    idleAlert != null &&
+                    !idleDismissed) ...[
+                  _IdleCashCard(alert: idleAlert, fmt: fmt),
+                  const SizedBox(height: 8),
                 ],
               ],
             ),
@@ -128,7 +175,173 @@ class NetWorthScreen extends ConsumerWidget {
   }
 }
 
-// ─── Sub-widgets ──────────────────────────────────────────────────────────────
+// ─── _MilestoneCard ───────────────────────────────────────────────────────────
+
+class _MilestoneCard extends StatelessWidget {
+  const _MilestoneCard({required this.milestone, required this.fmt});
+
+  final NetWorthMilestoneData milestone;
+  final NumberFormat fmt;
+
+  String _milestoneLabel(double value) {
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(value % 1000000 == 0 ? 0 : 1)}M';
+    }
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
+    }
+    return value.toStringAsFixed(0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final symbol = fmt.currencySymbol;
+    final monthsText = milestone.monthsToNext != null
+        ? milestone.monthsToNext! < 1
+            ? '< 1 month away'
+            : '~${milestone.monthsToNext!.round()} months away'
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.glassBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🎯', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              const Text(
+                'Next Milestone',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$symbol${_milestoneLabel(milestone.nextMilestone)}',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: milestone.progress,
+              minHeight: 6,
+              backgroundColor: AppColors.surfaceLight,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${(milestone.progress * 100).round()}% there',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              if (monthsText != null)
+                Text(
+                  monthsText,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── _IdleCashCard ────────────────────────────────────────────────────────────
+
+class _IdleCashCard extends ConsumerWidget {
+  const _IdleCashCard({required this.alert, required this.fmt});
+
+  final IdleCashAlertData alert;
+  final NumberFormat fmt;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.accentOrange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: AppColors.accentOrange.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('💤', style: TextStyle(fontSize: 20)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Idle Cash Detected',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${fmt.format(alert.idleAmount)} isn\'t working for you.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Losing ~${fmt.format(alert.monthlyErosion)}/month to inflation.',
+                  style: TextStyle(
+                    color: AppColors.accentOrange,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () =>
+                ref.read(idleCashDismissedProvider.notifier).state = true,
+            icon: const Icon(Iconsax.close_circle,
+                color: AppColors.textMuted, size: 18),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Sub-widgets (existing, unchanged) ───────────────────────────────────────
 
 class _NetWorthHeader extends StatelessWidget {
   const _NetWorthHeader({
@@ -143,7 +356,6 @@ class _NetWorthHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isPositive = summary.netWorth >= 0;
     final isDeltaPositive = (delta ?? 0) >= 0;
 
     return Container(
@@ -161,10 +373,7 @@ class _NetWorthHeader extends StatelessWidget {
         children: [
           const Text(
             'Total Net Worth',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 8),
           Text(
@@ -387,27 +596,50 @@ class _AccountRow extends StatelessWidget {
   }
 }
 
+// ─── _NetWorthChart ───────────────────────────────────────────────────────────
+
 class _NetWorthChart extends StatelessWidget {
-  const _NetWorthChart({required this.history});
+  const _NetWorthChart({required this.history, this.projection});
 
   final List<NetWorthSnapshot> history;
+  final List<NetWorthSnapshot>? projection;
 
   @override
   Widget build(BuildContext context) {
     if (history.length < 2) return const SizedBox.shrink();
 
-    final spots = history.asMap().entries.map((e) {
+    final histSpots = history.asMap().entries.map((e) {
       return FlSpot(e.key.toDouble(), e.value.netWorth);
     }).toList();
 
-    final minY = history.map((e) => e.netWorth).reduce((a, b) => a < b ? a : b);
-    final maxY = history.map((e) => e.netWorth).reduce((a, b) => a > b ? a : b);
+    // Projection spots start from the last historical index
+    final projSpots = projection != null
+        ? [
+            FlSpot(
+                (history.length - 1).toDouble(), history.last.netWorth),
+            ...projection!.asMap().entries.map((e) =>
+                FlSpot(history.length + e.key.toDouble(),
+                    e.value.netWorth)),
+          ]
+        : <FlSpot>[];
+
+    final allValues = [
+      ...history.map((e) => e.netWorth),
+      if (projection != null) ...projection!.map((e) => e.netWorth),
+    ];
+    final minY = allValues.reduce((a, b) => a < b ? a : b);
+    final maxY = allValues.reduce((a, b) => a > b ? a : b);
     final padding = (maxY - minY).abs() * 0.1 + 1;
+
+    final totalPoints =
+        history.length + (projection?.length ?? 0);
 
     return SizedBox(
       height: 160,
       child: LineChart(
         LineChartData(
+          minX: 0,
+          maxX: (totalPoints - 1).toDouble(),
           minY: minY - padding,
           maxY: maxY + padding,
           gridData: FlGridData(
@@ -420,22 +652,33 @@ class _NetWorthChart extends StatelessWidget {
           ),
           borderData: FlBorderData(show: false),
           titlesData: FlTitlesData(
-            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            leftTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
                   final idx = value.toInt();
-                  if (idx < 0 || idx >= history.length) {
-                    return const SizedBox.shrink();
+                  DateTime? date;
+                  if (idx >= 0 && idx < history.length) {
+                    date = history[idx].snapshotDate;
+                  } else if (projection != null) {
+                    final pIdx = idx - history.length;
+                    if (pIdx >= 0 && pIdx < projection!.length) {
+                      date = projection![pIdx].snapshotDate;
+                    }
                   }
-                  final date = history[idx].snapshotDate;
+                  if (date == null) return const SizedBox.shrink();
                   return Text(
                     '${date.month}/${date.day}',
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
+                    style: TextStyle(
+                      color: idx >= history.length
+                          ? AppColors.primary.withValues(alpha: 0.6)
+                          : AppColors.textMuted,
                       fontSize: 10,
                     ),
                   );
@@ -445,8 +688,9 @@ class _NetWorthChart extends StatelessWidget {
             ),
           ),
           lineBarsData: [
+            // Historical line
             LineChartBarData(
-              spots: spots,
+              spots: histSpots,
               isCurved: true,
               gradient: const LinearGradient(
                 colors: [AppColors.primary, AppColors.accent],
@@ -465,12 +709,25 @@ class _NetWorthChart extends StatelessWidget {
                 ),
               ),
             ),
+            // Projected line (dotted)
+            if (projSpots.isNotEmpty)
+              LineChartBarData(
+                spots: projSpots,
+                isCurved: true,
+                color: AppColors.primary.withValues(alpha: 0.5),
+                barWidth: 2,
+                dashArray: [6, 4],
+                dotData: const FlDotData(show: false),
+                belowBarData: BarAreaData(show: false),
+              ),
           ],
         ),
       ),
     );
   }
 }
+
+// ─── _EmptyState ──────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   @override
@@ -495,7 +752,8 @@ class _EmptyState extends StatelessWidget {
             const Text(
               'Add bank accounts and credit cards to track your net worth.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              style: TextStyle(
+                  color: AppColors.textSecondary, fontSize: 14),
             ),
           ],
         ),
